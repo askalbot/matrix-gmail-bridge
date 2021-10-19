@@ -20,6 +20,7 @@ httpx-oauth = "^0.3.6"
 pydantic = {git = "https://github.com/samuelcolvin/pydantic", "rev" = "c256dccbb383a7fd462f62fcb5d55558eb3cb108"}
 pycryptodome = "^3.11.0"
 structlog = "^21.2.0"
+PyYAML = "^6.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.5"
@@ -27,7 +28,6 @@ pytest-asyncio = "^0.15.1"
 pytest-watch = "^4.2.0"
 pytest-mock = "^3.6.1"
 yapf = "^0.31.0"
-PyYAML = "<6"
 lovely-pytest-docker = "^0.2.1"
 
 
