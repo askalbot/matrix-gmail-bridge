@@ -34,13 +34,6 @@ docker run --rm -e GMAIL_BRIDGE_CONFIG_PATH="/config.yaml" -v $PWD/config.yaml:/
 docker run --rm -e GMAIL_BRIDGE_CONFIG_PATH="/config.yaml" -v $PWD/config.yaml:/config.yaml ghcr.io/askalbot/matrix-gmail-bridge:main python3 -m app.main run_server
 ```
 
-
-
-## Details
-- gmails when sent to matrix will have following metadata:  
-	`{"gmail_id": "Id_of_the_mail", "attachment_ids": ["Ids_of_previous_messages_that_were_attached_to_this_body"]}`
-- gmails with attachement will be sent in multiple messages  
-	- First all the attachements one-by-one and at the last the body  
-	- only the last message will have the metadata defined above
-- Gmail Quotes are removed
-
+# Documentation
+- [Quickstart / How To Use](./docs/quickstart.md)
+- [Behaviour / Internals](./docs/behaviour.md)
