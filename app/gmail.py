@@ -30,7 +30,7 @@ from .prelude import *
 from dataclasses import InitVar
 from pydantic import BaseModel
 
-ACCEPT_DELAY = dt.timedelta(hours=1) # naming?
+INITIAL_REPLAY_DUR = dt.timedelta(hours=5)
 MatrixUserId = str
 
 
@@ -75,12 +75,11 @@ class Gmail(_BaseGmail):
 
 @dataclass
 class GmailClient:
-	last_mail_id: str
 	email_id: str
 	service: _aiogoogle.GoogleAPI
 	ag: _aiogoogle.Aiogoogle
+	last_mail_id: Optional[str] = None
 	email_name: Optional[str] = None
-	last_sync_time: dt.datetime = field(default_factory=lambda: dt.datetime.now() - ACCEPT_DELAY)
 
 	_new_mail_lock: aio.Lock = field(default_factory=aio.Lock)
 	_logger: BoundLogger = field(default_factory=lambda: Logger("gmail-client"))
@@ -104,7 +103,7 @@ class GmailClient:
 		service = await ag.discover('gmail', 'v1')
 
 		return GmailClient(
-			last_mail_id=user_state.last_mail_id or "0",
+			last_mail_id=user_state.last_mail_id,
 			email_id=user_state.email_address,
 			email_name=user_state.email_name,
 			service=service,
@@ -241,9 +240,16 @@ class GmailClient:
 				data['References'] = message['value']
 		return data
 
-	async def _get_new_email_ids(self, after: dt.datetime) -> List[str]:
+	async def _get_new_email_ids(self) -> AsyncGenerator[str, None]:
 		page_token = None
-		ids = []
+		ids: List[str] = []
+		if self.last_mail_id is None:
+			after = dt.datetime.now() - INITIAL_REPLAY_DUR
+		else:
+			raw, _ = await self._fetch_mail(self.last_mail_id)
+			ts = (int(raw['internalDate'])/1000) - 1
+			after = dt.datetime.fromtimestamp(ts)
+
 		while True:
 			q = f"after:{int(after.timestamp())} AND NOT label:sent AND NOT from:{self.email_id}"
 			req = self.service.users.messages.list(userId='me', pageToken=page_token, maxResults=500, q=q) # type: ignore
@@ -253,7 +259,10 @@ class GmailClient:
 			if page_token is None:
 				break
 		# single id can be there multiple times in respose, so convert to a `Set` first
-		return sorted(filter(lambda i: i > self.last_mail_id, set(ids)))
+		for mail_id in sorted(set(ids)):
+			if self.last_mail_id is None or mail_id > self.last_mail_id:
+				yield mail_id
+				self.last_mail_id = mail_id
 
 	async def _fetch_mail(self, gmail_id: str) -> Tuple[dict, Gmail]:
 		req = self.service.users.messages.get(userId='me', id=gmail_id, format='raw') # type: ignore
@@ -261,26 +270,22 @@ class GmailClient:
 		parsed_mail = mailparser.parse_from_string(base64.urlsafe_b64decode(api_msg['raw']).decode())
 		mail = self._parse_msg(api_msg, parsed_mail)
 
-		logger.debug("new mail", mail_id=api_msg['id'], subject=mail.content.subject)
 		return api_msg, mail
 
-	async def get_new_mails(self, only_after: dt.datetime) -> AsyncGenerator[Gmail, None]:
+	async def get_new_mails(self) -> AsyncGenerator[Gmail, None]:
 		"""
 		a mail is only returned if {only_after <= mail.time and mail.id > self.last_mail_id}
 		"""
 		# lock so self.last_mail_id is not read-write at same time
 		async with self._new_mail_lock:
-			new_msg_ids = await self._get_new_email_ids(only_after)
-			if len(new_msg_ids) != 0:
-				logger.debug("New Mails", user=self.email_id, total=len(new_msg_ids))
-			for msg_id in new_msg_ids:
-				raw_msg, gmail = await self._fetch_mail(msg_id)
+			async for msg_id in self._get_new_email_ids():
+				raw, gmail = await self._fetch_mail(msg_id)
+				logger.debug("new mail", mail_id=raw['id'], subject=gmail.content.subject)
 
 				# sometimes gmail doesn't label messages sent by us as `SENT` or maybe takes time to do so.
 				# in those cases we manually filter it
 				if gmail.sender != self.email_id:
 					yield gmail
-					self.last_mail_id = raw_msg['id']
 				else:
 					logger.warning(
 						"Gmail Api returned mail sent by us but doesn't have label=SENT",
@@ -377,7 +382,6 @@ class GmailClientManager:
 	"""
 	users: Dict[MatrixUserId, Tuple[LoggedInUser, GmailClient]]
 	on_token_error: Callable[[TokenExpiredException, User], Any] = default_exc_handler
-	last_sync_time: dt.datetime = field(default_factory=lambda: dt.datetime.now() - ACCEPT_DELAY)
 	oauth_client: GoogleAuth = field(init=False, default_factory=GoogleAuth)
 	_logger: BoundLogger = field(default_factory=lambda: logger)
 
@@ -423,16 +427,13 @@ class GmailClientManager:
 		retry = 0
 		while True:
 			try:
-				started_at = dt.datetime.now()
-
 				for (user, client) in self.users.values():
 					try:
-						async for mail in client.get_new_mails(self.last_sync_time):
+						async for mail in client.get_new_mails():
 							yield user, mail
 					except _aiogoogle.excs.AuthError as e:
 						await self.on_token_error(TokenExpiredException(e), user)
 
-				self.last_sync_time = started_at
 				retry = 0
 				await aio.sleep(CONFIG.GMAIL_RECHECK_SECONDS)
 
