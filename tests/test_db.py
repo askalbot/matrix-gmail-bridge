@@ -4,9 +4,9 @@ from app.db import *
 async def _execute_kv_test(kv: Kv):
 	assert await kv.get("somethign") == None
 	await kv.set("somethign", "2")
-	await kv.get("somethign") == "2"
+	assert await kv.get("somethign") == "2"
 	await kv.set("somethign", "3")
-	await kv.get("somethign") == "3"
+	assert await kv.get("somethign") == "3"
 
 @pytest.mark.asyncio
 async def test_kv():
