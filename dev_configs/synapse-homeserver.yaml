@@ -1,0 +1,89 @@
+account_threepid_delegates: null
+acme:
+  account_key_file: DATADIR/acme_account.key
+  bind_addresses:
+  - '::'
+  - 0.0.0.0
+  domain: matrix.example.com
+  enabled: false
+  port: 80
+  reprovision_threshold: 30
+admin_contact: mailto:example@email.com
+allow_guest_access: true
+allow_public_rooms_over_federation: false
+app_service_config_files:
+- /bridge/gmail.yaml
+block_non_admin_invites: false
+database:
+  args:
+    database: /data/db/synapse.db
+  name: sqlite3
+enable_registration: true
+enable_search: true
+encryption_enabled_by_default_for_room_type: false
+federation_ip_range_blacklist:
+- 127.0.0.0/8
+- 10.0.0.0/8
+- 172.16.0.0/12
+- 192.168.0.0/16
+- 100.64.0.0/10
+- 169.254.0.0/16
+- ::1/128
+- fe80::/64
+- fc00::/7
+hs_disabled: false
+hs_disabled_message: null
+limit_remote_rooms: null
+listeners:
+- bind_addresses:
+  - 0.0.0.0
+  port: 8008
+  resources:
+  - compress: false
+    names:
+    - client
+    - federation
+  tls: false
+  type: http
+  x_forwarded: true
+log_config: /data/jif.one.log.config
+max_image_pixels: 32M
+max_spider_size: 10M
+max_upload_size: 10M
+media_store_path: /data/media_store
+metrics_flags: null
+oidc_config:
+  user_mapping_provider:
+    config: null
+opentracing: null
+password_config:
+  policy: null
+password_providers: null
+pid_file: /data/homeserver.pid
+presence:
+  presence_router: null
+public_baseurl: http://localhost:8008
+redaction_retention_period: 7d
+report_stats: false
+retention: null
+saml2_config:
+  user_mapping_provider:
+    config: null
+server_name: jif.one
+signing_key_path: /data/keys/jif.one.signing.key
+spam_checker: null
+sso: null
+suppress_key_server_warning: null
+uploads_path: /data/uploads
+url_preview_enabled: false
+url_preview_ip_range_blacklist:
+- 127.0.0.0/8
+- 10.0.0.0/8
+- 172.16.0.0/12
+- 192.168.0.0/16
+- 100.64.0.0/10
+- 169.254.0.0/16
+- ::1/128
+- fe80::/64
+- fc00::/7
+web_client_location: http://localhost:80/

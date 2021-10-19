@@ -1,0 +1,23 @@
+{
+    "name": "Gmail-Bridge",
+    "dockerComposeFile": ["../docker-compose.yml"],
+    "service": "gmail-bridge",
+    "forwardPorts": [80, 8008],
+	"workspaceFolder": "/app",
+	"extensions": [
+		"ms-python.python",
+		"ms-azuretools.vscode-docker"
+	],
+    "settings": {
+        "python.testing.pytestArgs": [
+        "tests"
+        ],
+        "python.testing.unittestEnabled": false,
+        "python.testing.pytestEnabled": true,
+        "python.formatting.provider": "yapf"
+    },
+    "remoteUser": "dev",
+}
+  
+  
+  

@@ -1,0 +1,43 @@
+# 16 byte length base64 encoded aes key. used to encrypt gmail tokens of users.
+AES_KEY: 1d2rouuI7QxJqzXVfk5NBw==
+
+# token to use for making request with homeserver
+AS_TOKEN: secure-string-token
+
+# token to verify when recieving events from homeserver
+HS_TOKEN: secure-different-string-token
+
+# (optional) email display name to use for sending mails. 
+DEFAULT_EMAIL_NAME: null
+
+# Interval between requesting gmail api for new mails
+GMAIL_RECHECK_SECONDS: 300
+
+# Id to use for this bridge
+BRIDGE_ID: gmail
+
+# url(without port) by which homeserver can access the bridge
+BRIDGE_URL: http://localhost
+
+# port to start the bridge on
+PORT: 8010
+
+# Bridge Localport
+SENDER_LOCALPART: appservice-gmail
+
+# prefix to use for room aliases and users created by this bridge
+NAMESPACE_PREFIX: _gmail_bridge_
+
+# url by which bridge can access homeserver
+HOMESERVER_URL: http://localhost:8008
+
+# Name of homeserver
+HOMESERVER_NAME: example.com
+
+gmail_client_secret: ababaabababababababab
+
+gmail_client_id: sdf-sdfkjsdf-
+
+gmail_project_id: project-myproject-abc
+
+
