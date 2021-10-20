@@ -33,6 +33,11 @@ class RequestException(Exception):
 		else:
 			return self.e[1].get('err_code')
 
+class BadEventException(Exception):
+	def __init__(self, event: nio.BadEventType):
+		self.event = event
+		super().__init__(f"bad event, {event=}")
+
 
 class NioClient(AsyncClient):
 	async def appservice_login(self, access_token: str, appservice_id: str):
@@ -163,10 +168,13 @@ class NioClient(AsyncClient):
 
 		return powers
 
-	async def c_room_members(self, room_id: str) -> List[str]:
-		r = await self.joined_members(room_id)
-		assert isinstance(r, nio.JoinedMembersResponse), r
-		return [m.user_id for m in r.members]
+	async def c_room_members(self, room_id: str, as_user: Optional[str] = None) -> List[str]:
+		if as_user is None:
+				as_user = self.user_id
+		r = await self.raw("GET", f"/rooms/{quote_url(room_id)}/joined_members", user=as_user)
+		resp = await r.json()
+		return list(resp['joined'])
+
 
 	async def c_send_attachement(self, room_id: str, as_user: str, attachment: Attachment, info: Optional[Dict] = None) -> str:
 		""" returns msg id """
@@ -237,6 +245,17 @@ class NioClient(AsyncClient):
 		if not r.ok:
 			raise await RequestException.from_aio_resp(r)
 		return (await r.json())['event_id']
+
+	async def c_room_get_event(self, room_id: str, event_id: str, as_user: Optional[str] = None) -> nio.Event:
+		if as_user is None:
+			as_user = self.user_id
+		self.room_get_event
+		r = await self.raw("GET", f"/rooms/{quote_url(room_id)}/event/{quote_url(event_id)}", user=as_user)
+		data = await r.json()
+		event =  nio.Event.parse_event(data)
+		if not isinstance(event, nio.Event):
+			raise BadEventException(event)
+		return event
 
 	async def c_get_room_aliases(self, room_id: str) -> List[str]:
 		r = await self.raw("GET", f"/rooms/{quote_url(room_id)}/aliases")

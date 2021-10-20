@@ -83,7 +83,22 @@ class EventHandler:
 
 	async def m_handle_room_member_event(self, event: nio.RoomMemberEvent):
 		room_id = event.source['room_id']
-		if event.membership == "join" and u.is_bot_mxid(event.sender):
+		if event.membership == "join" and u.is_bot_mxid(event.sender): # replay
+			if 'replaces_state' not in event.source['unsigned']:
+				# joined without invite event, no way to replay
+				logger.debug("No Replay, Joined without invite", event_id=event.event_id, joined_using=event.sender)
+				return 
+			invite_event = await self.nio_client.c_room_get_event(room_id, event.source['unsigned']['replaces_state'], event.sender)
+			inviter = invite_event.sender
+			if inviter == self.nio_client.user_id or utils.is_bot_mxid(inviter):
+				# no need to replay since the inviter (part of room) is one of appservices bot.
+				# so we recieved all of the events after the invite
+				logger.debug("No Replay, Different bot already in room", event_id=event.event_id, joined_using=event.sender)
+				return 
+
+			# FIXME: currently second bot will try to replay if it was invited by the user
+			# possible fix: look at room join/invite history to determine if there was any bot in room
+			#    when invite_event was send causing this join.
 			join_event = event
 			missed_events = await self.get_missed_msg_events(
 				room_id,
@@ -98,9 +113,10 @@ class EventHandler:
 				e.source['room_id'] = room_id
 				await self.handle_matrix_event(e)
 			return
-		if event.sender == self.nio_client.user_id or u.is_bot_mxid(event.sender):
-			return
 		if event.membership == "invite":
+			if event.sender == self.nio_client.user_id or u.is_bot_mxid(event.sender):
+				# code that invites should also handle joining
+				return
 			if event.state_key == self.nio_client.user_id:
 				await self.nio_client.c_join(mxid=event.state_key, room_id=room_id)
 				await self.nio_client.c_send_msg(room_id, OAUTH_INSTRUCTIONS)
