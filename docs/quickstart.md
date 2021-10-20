@@ -28,7 +28,7 @@ Send `name my name` (in `auth-room`) to use `my name` as display name for mails.
 - Invite virtual user to room to whom the email should be sent.
     - To send email to `myemail@gmail.com`, you should invite `@_gmail_bridge_myemail_at_gmail.com:example.com` (based on default config)
     - Refer to [Behaviour Docs](./behaviour.md) for more details
-- If the email is correct and bridge is currectly running then the invitation will be accepted instantly.
+- If the email is correct and bridge is correctly running then the invitation will be accepted instantly.
 - Send the message in matrix room.
     - This will create a new thread in gmail.
 
