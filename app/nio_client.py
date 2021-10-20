@@ -71,7 +71,9 @@ class NioClient(AsyncClient):
 	async def c_room_resolve_alias(self, room_alias: str) -> Optional[str]:
 		r = await self.room_resolve_alias(room_alias)
 		if isinstance(r, nio.RoomResolveAliasError):
-			return None
+			if r.status_code == "M_NOT_FOUND":
+				return None
+			raise RequestException(r)
 		else:
 			return r.room_id
 
