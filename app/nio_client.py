@@ -181,9 +181,10 @@ class NioClient(AsyncClient):
 	async def c_send_attachement(self, room_id: str, as_user: str, attachment: Attachment, info: Optional[Dict] = None) -> str:
 		""" returns msg id """
 		length = len(attachment.content)
-		r = await self.upload(lambda a, b: attachment.content_io(), attachment.mime_type)
+		r, _decrypt_info = await self.upload(lambda a, b: attachment.content_io(), attachment.mime_type, filesize=length)
 		assert isinstance(r, nio.UploadResponse), r
 		url = r.content_uri
+
 		if attachment.type == AttachmentType.image:
 			msgtype = "m.image"
 		elif attachment.type == AttachmentType.audio:
@@ -204,7 +205,7 @@ class NioClient(AsyncClient):
 			"url": url,
 			"msgtype": msgtype,
 		}
-		r = await self.raw("PUT", f"/rooms/{quote_url(room_id)}/send/m.room.message/{uuid.uuid4()}", user=as_user)
+		r = await self.raw("PUT", f"/rooms/{quote_url(room_id)}/send/m.room.message/{uuid.uuid4()}", user=as_user, data=content)
 		return (await r.json())['event_id']
 
 	async def c_send_msg(self, room_id: str, body: str, html: Optional[str]=None, info: Optional[Dict] = None, as_user: Optional[str] = None) -> str:
