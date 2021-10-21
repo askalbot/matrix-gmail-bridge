@@ -5,7 +5,7 @@ import os
 from app.config import get_config, BridgeConfig, override_config
 import pytest
 
-SYNAPSE_URL = "http://localhost:8008"
+SYNAPSE_URL = "http://localhost:8009"
 
 
 @pytest.fixture(scope='session')
