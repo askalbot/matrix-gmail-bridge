@@ -104,8 +104,8 @@ services:
   gmail-bridge:
     volumes:
     - ./.matrix_bridge/:/bridge/
-    - gb-venv:/app/.venv
     - ./:/app
+    - gb-venv:/app/.venv
     - ./config.yaml:/gmail-config/gmail.config.yaml
     environment:
       GMAIL_BRIDGE_CONFIG_PATH: /gmail-config/gmail.config.yaml
@@ -115,6 +115,7 @@ services:
     - init-element
     - init-config
     - init-synapse
+    - synapse
     network_mode: host
     entrypoint: []
     command:

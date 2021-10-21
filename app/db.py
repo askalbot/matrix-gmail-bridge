@@ -1,4 +1,3 @@
-from app.config import CONFIG
 from dataclasses import dataclass
 
 from typing import *
@@ -34,8 +33,11 @@ class DictKv(Kv):
 
 @dataclass
 class MatrixKv(Kv):
+	"""
+	Room Alias should preferablly under exclusive namespace
+	"""
 	client: NioClient
-	room_alias_to_use: str = field(default_factory=lambda:f"{CONFIG.NAMESPACE_PREFIX}state_room")
+	room_alias_to_use: str
 
 	async def get_state_room(self) -> str:
 		full_alias = f"#{self.room_alias_to_use}:{self.client.homeserver_name}"
@@ -61,7 +63,7 @@ class MatrixKv(Kv):
 @dataclass
 class Db:
 	kv: Kv
-	encryption_key: bytes = CONFIG.get_aes_key()
+	encryption_key: bytes
 
 	async def get_user(self, user_id: str) -> User:
 		if (e:= await self.kv.get("u:" + user_id)) is not None:

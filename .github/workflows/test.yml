@@ -33,4 +33,4 @@ jobs:
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
       - name: Run test suite
         run: |
-          poetry run pytest -v
+          docker-compose run gmail-bridge /app/.venv/bin/python -m pytest --error-for-skips

@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from .config import CONFIG
 from .prelude import logger
 
 email_re = re.compile(
@@ -14,52 +13,73 @@ email_re = re.compile(
 email_keyword = "_at_"
 
 
+@dataclass
+class MatrixUtility:
+	namespace_prefix: str
+	homeserver_name: str
 
-def is_valid_email(email: str) -> bool:
-	return email_re.fullmatch(email.lower()) is not None
+	def extract_alias_thread(self, alias: str) -> str:
+		alias_with_hs_name = alias.replace(f"#{self.namespace_prefix}", "", 1)
+		return alias_with_hs_name[:-(len(self.homeserver_name) + 1)]
 
 
-def extract_alias_thread(alias: str) -> str:
-	alias_with_hs_name = alias.replace(f"#{CONFIG.NAMESPACE_PREFIX}", "", 1)
-	return alias_with_hs_name[:-(len(CONFIG.HOMESERVER_NAME) + 1)]
+	def generate_alias(self, alias_name: str) -> str:
+		return f"#{self.namespace_prefix}{alias_name}:{self.homeserver_name}"
 
 
-def generate_alias(alias_name: str) -> str:
-	return f"#{CONFIG.NAMESPACE_PREFIX}{alias_name}:{CONFIG.HOMESERVER_NAME}"
+	def generate_mxid(self, email: str) -> str:
+		email = email_sanitize(email)
+		return self._generate_mxid(email)
 
-def extract_alias_localpart(alias: str) -> str:
+
+	def _generate_mxid(self, localpart: str) -> str:
+		return f"@{self.namespace_prefix}{localpart}:{self.homeserver_name}"
+
+
+	def is_bot_mxid(self, mxid: str) -> bool:
+		return mxid.startswith(f"@{self.namespace_prefix}")
+
+
+	def is_thread_alias(self, alias: str) -> bool:
+		return alias.startswith(f"#{self.namespace_prefix}")
+
+
+
+	def extract_email(self, mxid: str) -> str:
+		localpart = extract_mxid_localpart(mxid, self.homeserver_name)
+		localpart=localpart.replace(self.namespace_prefix, "", 1)
+		return email_desanitize(localpart)
+
+	def is_valid_email_mxid(self, mxid: str) -> bool:
+		senatized_email = extract_mxid_localpart(mxid, self.homeserver_name)
+		if "_at_" not in senatized_email:
+			return False
+		return is_valid_email(email_desanitize(senatized_email))
+	def extract_alias_localpart(self, alias: str) -> str:
+		return extract_alias_localpart(alias, self.homeserver_name)
+
+	def extract_mxid_localpart(self, mxid: str) -> str:
+		return extract_mxid_localpart(mxid, self.homeserver_name)
+
+	def extract_localpart(self, val: str) -> str:
+		return extract_localpart(val, self.homeserver_name)
+
+def extract_alias_localpart(alias: str, homeserver_name: str) -> str:
 	assert alias[0]=="#"
 	alias_with_hs_name = alias.replace(f"#", "", 1)
-	return alias_with_hs_name[:-(len(CONFIG.HOMESERVER_NAME) + 1)]
+	return alias_with_hs_name[:-(len(homeserver_name) + 1)]
 
-def extract_mxid_localpart(mxid: str) -> str:
+def extract_mxid_localpart(mxid: str, homeserver_name: str) -> str:
 	assert mxid[0]=="@"
 	mxid_with_hs_name = mxid.replace(f"@", "", 1)
-	return mxid_with_hs_name[:-(len(CONFIG.HOMESERVER_NAME) + 1)]
+	return mxid_with_hs_name[:-(len(homeserver_name) + 1)]
 
-def extract_localpart(val: str) -> str:
+def extract_localpart(val: str, homeserver_name: str) -> str:
 	assert val[0] in ['#', '@']
 	if val[0] == '@':
-		return extract_mxid_localpart(val)
+		return extract_mxid_localpart(val, homeserver_name)
 	else:
-		return extract_alias_localpart(val)
-
-def generate_mxid(email: str) -> str:
-	email = email_sanitize(email)
-	return _generate_mxid(email)
-
-
-def _generate_mxid(localpart: str) -> str:
-	return f"@{CONFIG.NAMESPACE_PREFIX}{localpart}:{CONFIG.HOMESERVER_NAME}"
-
-
-def is_bot_mxid(mxid: str) -> bool:
-	return mxid.startswith(f"@{CONFIG.NAMESPACE_PREFIX}")
-
-
-def is_thread_alias(alias: str) -> bool:
-	return alias.startswith(f"#{CONFIG.NAMESPACE_PREFIX}")
-
+		return extract_alias_localpart(val, homeserver_name)
 
 def email_sanitize(email: str) -> str:
 	return email.replace("@", email_keyword)
@@ -70,17 +90,9 @@ def email_desanitize(sanitized_email: str) -> str:
 	email = sanitized_email[:index] + "@" + sanitized_email[index + len(email_keyword):]
 	return email
 
-def extract_email(mxid: str) -> str:
-	localpart = extract_mxid_localpart(mxid)
-	localpart=localpart.replace(CONFIG.NAMESPACE_PREFIX, "", 1)
-	return email_desanitize(localpart)
 
-
-def is_valid_email_mxid(mxid: str) -> bool:
-	senatized_email = extract_mxid_localpart(mxid)
-	if "_at_" not in senatized_email:
-		return False
-	return is_valid_email(email_desanitize(senatized_email))
+def is_valid_email(email: str) -> bool:
+	return email_re.fullmatch(email.lower()) is not None
 
 
 @dataclass
@@ -125,5 +137,3 @@ if __name__ == "__main__":
 
 	print(email_sanitize("ak@iffmail.com"))
 	print(email_desanitize(email_sanitize("ak@iffmail.com")))
-	alias = _generate_mxid("hey")
-	print(extract_mxid_localpart(alias))

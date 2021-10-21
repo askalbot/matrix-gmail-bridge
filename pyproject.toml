@@ -29,6 +29,7 @@ pytest-watch = "^4.2.0"
 pytest-mock = "^3.6.1"
 yapf = "^0.31.0"
 lovely-pytest-docker = "^0.2.1"
+pytest-error-for-skips = "^2.0.2"
 
 
 [build-system]

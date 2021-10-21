@@ -10,6 +10,7 @@ from .gmail import GmailClientManager, Gmail, PreparedGmail, GmailTokenException
 import json
 from dataclasses import dataclass, field
 from .db import Db
+from .config import BridgeConfig
 from .models import LoggedInUser, User
 from . import utils as u
 from . import utils
@@ -18,7 +19,6 @@ import asyncio as aio
 from urllib.parse import quote_plus as quote_url
 import html
 from typing_extensions import TypeGuard
-from .config import CONFIG
 from .models import *
 
 
@@ -55,8 +55,13 @@ class EventHandler:
 	gclient: GmailClientManager
 	nio_client: NioClient
 	db: Db
+	config: BridgeConfig
 	last_error_time: DefaultDict[USER_MXID, dt.datetime] = field(default_factory=lambda: defaultdict(min_time))
+	util: utils.MatrixUtility = field(init=False)
 	_logger: BoundLogger = field(default_factory=lambda: Logger("Event-Handler"))
+
+	def __post_init__(self):
+		self.util = utils.MatrixUtility(self.config.NAMESPACE_PREFIX, self.config.HOMESERVER_NAME)
 
 	async def run_gmail_loop(self) -> NoReturn:
 		retry = 0
@@ -83,14 +88,14 @@ class EventHandler:
 
 	async def m_handle_room_member_event(self, event: nio.RoomMemberEvent):
 		room_id = event.source['room_id']
-		if event.membership == "join" and u.is_bot_mxid(event.sender): # replay
+		if event.membership == "join" and self.util.is_bot_mxid(event.sender): # replay
 			if 'replaces_state' not in event.source['unsigned']:
 				# joined without invite event, no way to replay
 				logger.debug("No Replay, Joined without invite", event_id=event.event_id, joined_using=event.sender)
 				return 
 			invite_event = await self.nio_client.c_room_get_event(room_id, event.source['unsigned']['replaces_state'], event.sender)
 			inviter = invite_event.sender
-			if inviter == self.nio_client.user_id or utils.is_bot_mxid(inviter):
+			if inviter == self.nio_client.user_id or self.util.is_bot_mxid(inviter):
 				# no need to replay since the inviter (part of room) is one of appservices bot.
 				# so we recieved all of the events after the invite
 				logger.debug("No Replay, Different bot already in room", event_id=event.event_id, joined_using=event.sender)
@@ -114,21 +119,21 @@ class EventHandler:
 				await self.handle_matrix_event(e)
 			return
 		if event.membership == "invite":
-			if event.sender == self.nio_client.user_id or u.is_bot_mxid(event.sender):
+			if event.sender == self.nio_client.user_id or self.util.is_bot_mxid(event.sender):
 				# code that invites should also handle joining
 				return
 			if event.state_key == self.nio_client.user_id:
 				await self.nio_client.c_join(mxid=event.state_key, room_id=room_id)
 				await self.nio_client.c_send_msg(room_id, OAUTH_INSTRUCTIONS)
 			else:
-				if not u.is_valid_email_mxid(event.state_key):
+				if not self.util.is_valid_email_mxid(event.state_key):
 					return
 				await self.nio_client.c_join(mxid=event.state_key, room_id=room_id)
 				await self.nio_client.c_invite_and_join(mxid=self.nio_client.user_id, room_id=room_id, invite_using=event.state_key)
 	
 	async def _get_bots_in_room(self, room_id: str) -> List[str]:
 		users = await self.nio_client.c_room_members(room_id)
-		return [u for u in users if utils.is_bot_mxid(u)]
+		return [u for u in users if self.util.is_bot_mxid(u)]
 
 	async def handle_token_error(self, e: TokenExpiredException, user: User):
 		# TODO: send dm to user
@@ -141,10 +146,10 @@ class EventHandler:
 	
 	async def get_thread_from_room(self, room_id: str)-> Optional[str]:
 		aliases = await self.nio_client.c_get_room_aliases(room_id)
-		thread_aliases = [a  for a in aliases if u.is_thread_alias(a)]
+		thread_aliases = [a  for a in aliases if self.util.is_thread_alias(a)]
 		assert len(thread_aliases) <=1, f"{room_id} has multiple thread aliases, {thread_aliases=}"
 		if len(thread_aliases) != 0:
-			return utils.extract_alias_thread(thread_aliases[0])
+			return self.util.extract_alias_thread(thread_aliases[0])
 
 		
 	async def m_send_mail(self, event: Union[nio.RoomMessageText, nio.RoomMessageMedia], ):
@@ -161,7 +166,7 @@ class EventHandler:
 				# read to, cc from last mail to replicate the gmail-gui behavior
 				if "to" in latest_msg.source['content'] and "cc" in latest_msg.source['content']:
 					sender = latest_msg.sender
-					sender_email = u.extract_email(sender)
+					sender_email = self.util.extract_email(sender)
 					to = latest_msg.source['content']['to'] + [sender_email]
 					cc = latest_msg.source['content']['cc']
 
@@ -170,8 +175,8 @@ class EventHandler:
 			power_levels = await self.nio_client.c_room_power_levels(room_id)
 			to = [u for u, p in power_levels.items() if p == 0 and u != self.nio_client.user_id]
 			cc = [u for u, p in power_levels.items() if p == -1 and u != self.nio_client.user_id]
-			to = [utils.extract_email(u) for u in to]
-			cc = [utils.extract_email(u) for u in cc]
+			to = [self.util.extract_email(u) for u in to]
+			cc = [self.util.extract_email(u) for u in cc]
 
 		if user not in self.gclient.users:
 			self._logger.debug("user not registered", user=user, all_users=list(self.gclient.users))
@@ -188,20 +193,20 @@ class EventHandler:
 				await self.handle_token_error(e, user)
 				return
 
-			new_alias = u.generate_alias(thread_id)
+			new_alias = self.util.generate_alias(thread_id)
 			await self.nio_client.c_set_alias(room_id, new_alias)
 		else:
 			mail = PreparedGmail(sender=user, to=to, cc=cc, thread_id=room_thread, content=content)
 			await self.gclient.send_mail(mail)
 
 	async def m_handle_room_message_event(self, event: Union[nio.RoomMessageText, nio.RoomMessageMedia]):
-		if event.sender == self.nio_client.user_id or utils.is_bot_mxid(event.sender):
+		if event.sender == self.nio_client.user_id or self.util.is_bot_mxid(event.sender):
 			return
 		room_id = event.source['room_id']
 		user = event.sender
 		# users = await self.nio_client.c_room
 		users = await self.nio_client.c_room_members(room_id)
-		virtual_users = [u for u in users if utils.is_bot_mxid(u)]
+		virtual_users = [u for u in users if self.util.is_bot_mxid(u)]
 
 		is_auth_room = len(virtual_users) == 0
 		is_mail_room = len(virtual_users) != 0
@@ -286,21 +291,21 @@ class EventHandler:
 	async def handle_gmail_message(self, user: LoggedInUser, mail: Gmail):
 
 		thread = mail.thread_id
-		room_alias = u.generate_alias(thread)
+		room_alias = self.util.generate_alias(thread)
 		mail = mail.without(user.email_address)
-		sender_mxid = u.generate_mxid(mail.sender)
+		sender_mxid = self.util.generate_mxid(mail.sender)
 
-		bots = [u.generate_mxid(e) for e in mail.to + mail.cc if e != user.email_address]
+		bots = [self.util.generate_mxid(e) for e in mail.to + mail.cc if e != user.email_address]
 		bots.append(sender_mxid)
-		powers = {u.generate_mxid(e): -1 for e in mail.cc if e != user.email_address}
-		powers.update({u.generate_mxid(e): 0 for e in mail.to if e != user.email_address})
+		powers = {self.util.generate_mxid(e): -1 for e in mail.cc if e != user.email_address}
+		powers.update({self.util.generate_mxid(e): 0 for e in mail.to if e != user.email_address})
 
 		room_id = await self.nio_client.c_room_resolve_alias(room_alias)
 		await aio.gather(*[self.nio_client.c_ensure_appservice_user(m) for m in bots])
 
 
 		if room_id is None:
-			r = await self.nio_client.room_create(invite=[user.matrix_id]+bots, power_level_override=powers, alias=utils.extract_localpart(room_alias), name=mail.content.subject)
+			r = await self.nio_client.room_create(invite=[user.matrix_id]+bots, power_level_override=powers, alias=self.util.extract_localpart(room_alias), name=mail.content.subject)
 			assert isinstance(r, nio.RoomCreateResponse), r
 			for b in bots:
 				await self.nio_client.c_join(r.room_id, mxid=b)
@@ -314,7 +319,7 @@ class EventHandler:
 				await self.nio_client.c_invite_and_join(a, room_id=room_id)
 				# TODO: set power levels ?
 
-		by = u.generate_mxid(mail.sender)
+		by = self.util.generate_mxid(mail.sender)
 		attachement_msg_ids = await self.send_attachements(mail, user=by, room=room_id)
 		info = {"to": mail.to, "cc": mail.cc, "message_id": mail.gmail_id, "attachemnt_ids": attachement_msg_ids}
 		await self.nio_client.c_send_msg(room_id=room_id, info=info, as_user=by, body=mail.content.body, html=mail.content.html_body)
@@ -340,7 +345,7 @@ class EventHandler:
 			name = msg.body
 			mime_type = self.guess_mime(msg)
 			media_id = msg.url.split("/")[-1]
-			r = await self.nio_client.download(CONFIG.HOMESERVER_NAME, media_id)
+			r = await self.nio_client.download(self.nio_client.homeserver_name, media_id)
 			assert isinstance(r, nio.DownloadResponse), r
 			attachment = Attachment(mime_type=mime_type, content=r.body, name=name)
 			return MsgContent(body=name, html_body=f"<div>{html.escape(name)}</div>", attachment=[attachment], subject=room_name)

@@ -1,5 +1,6 @@
 import pytest
 from app.db import *
+import os
 
 async def _execute_kv_test(kv: Kv):
 	assert await kv.get("somethign") == None
@@ -14,7 +15,7 @@ async def test_kv():
 
 @pytest.mark.asyncio
 async def test_db():
-	db = Db(DictKv())
+	db = Db(DictKv(), os.urandom(16))
 
 	assert len(await db._get_all_users()) == 0
 	assert (await db.get_user("unknown_user")).auth_state == AuthState.logged_out
