@@ -17,6 +17,10 @@
         "python.testing.pytestArgs": [
             "tests"
         ],
+        "python.formatting.yapfArgs": [
+            "--style",
+            "{based_on_style: pep8, continuation_align_style: 'valign-right', coalesce_brackets: true, dedent_closing_brackets: true, SPLIT_COMPLEX_COMPREHENSION: true, SPLIT_BEFORE_EXPRESSION_AFTER_OPENING_PAREN: false, column_limit: 128, spaces_before_comment: 1}"
+        ],
         "python.testing.unittestEnabled": false,
         "python.testing.pytestEnabled": true,
         "python.formatting.provider": "yapf",

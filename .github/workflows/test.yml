@@ -35,6 +35,7 @@ jobs:
       # - name: Install dependencies
       #   run: poetry install --no-ansi -n
       #   if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      # TODO: Cache the builds
       - name: Docker Compose Build 
         run: |
           docker-compose build
