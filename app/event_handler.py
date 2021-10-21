@@ -340,8 +340,8 @@ class EventHandler:
 			name = msg.body
 			mime_type = self.guess_mime(msg)
 			media_id = msg.url.split("/")[-1]
-			r = await self.nio_client.download(CONFIG.HOMESERVER_URL, media_id)
-			assert isinstance(r, nio.DownloadResponse)
+			r = await self.nio_client.download(CONFIG.HOMESERVER_NAME, media_id)
+			assert isinstance(r, nio.DownloadResponse), r
 			attachment = Attachment(mime_type=mime_type, content=r.body, name=name)
 			return MsgContent(body=name, html_body=f"<div>{html.escape(name)}</div>", attachment=[attachment], subject=room_name)
 
