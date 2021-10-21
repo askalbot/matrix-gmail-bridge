@@ -33,4 +33,4 @@ jobs:
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
       - name: Run test suite
         run: |
-          docker-compose run gmail-bridge /app/.venv/bin/python -m pytest --error-for-skips
+          DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose run gmail-bridge /app/.venv/bin/python -m pytest --error-for-skips
