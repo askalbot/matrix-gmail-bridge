@@ -1,5 +1,6 @@
 import base64
 import httpx
+import time
 import os
 from app.config import get_config, BridgeConfig, override_config
 import pytest
@@ -23,11 +24,14 @@ def setup_test_config() -> BridgeConfig:
 
 
 def is_synapse_running(url: str) -> bool:
-    try:
-        httpx.get(url)
-        return True
-    except httpx.HTTPError:
-        return False
+    for i in range(10):
+        try:
+            httpx.get(url)
+            return True
+        except httpx.HTTPError:
+            pass
+        time.sleep(1)
+    return False
 
 
 synapse_integration = pytest.mark.skipif(
