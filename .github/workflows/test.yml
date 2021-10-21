@@ -2,6 +2,10 @@
 name: Test
 on: push
 
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1 
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -31,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-ansi -n
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      - name: Docker Compose Build 
+        run: |
+          docker-compose build
       - name: Run test suite
         run: |
-          DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker-compose run gmail-bridge /app/.venv/bin/python -m pytest --error-for-skips
+          docker-compose run gmail-bridge /app/.venv/bin/python -m pytest --error-for-skips

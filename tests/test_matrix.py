@@ -24,13 +24,14 @@ def setup_test_config() -> BridgeConfig:
 
 
 def is_synapse_running(url: str) -> bool:
-    for i in range(10):
+    """ waits ~10s"""
+    for i in range(35):
         try:
             httpx.get(url)
             return True
         except httpx.HTTPError:
             pass
-        time.sleep(1)
+        time.sleep(0.3)
     return False
 
 
