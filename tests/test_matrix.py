@@ -91,7 +91,9 @@ class MockGmailClient:
         return cls(user_state, user_state.email_address)
 
     async def get_new_mails(self) -> AsyncGenerator[Gmail, None]:
-        for i in self.new_mails:
+        mails = self.new_mails.copy()
+        self.new_mails = []
+        for i in mails:
             yield i
 
     async def reply_to_thread(self, thread_id: str, content: MsgContent, to: List[str], cc: List[str] = []):
@@ -240,9 +242,14 @@ async def keep_checking(
     return success
 
 
-@synapse_integration
-@pytest.mark.asyncio
-async def test_mock(mock_google, test_config: BridgeConfig, run_server, test_client: app.nio_client.NioClient):
+@dataclass
+class TestUser:
+    nio_client: app.nio_client.NioClient
+    gclient: MockGmailClient
+
+
+@pytest.fixture(scope="function")
+async def test_user(test_config: BridgeConfig, mock_google, run_server, test_client: app.nio_client.NioClient) -> TestUser:
     auth = MockGoogleAuth(test_config.get_service_key())
     from app.main import event_handler
 
@@ -251,14 +258,41 @@ async def test_mock(mock_google, test_config: BridgeConfig, run_server, test_cli
     gcm.users = cast(Dict[MatrixUserId, Tuple[LoggedInUser, MockGmailClient]], gcm.users) # type: ignore
 
     await gcm.upsert_user(User(matrix_id=test_client.user_id).logged_in(token=await auth.get_access_token("some code")))
-    r = await test_client.room_create(name="my room", invite=['@_gmail_bridge_nnkit_at_protonmail.com:jif.one'])
-    assert isinstance(r, nio.RoomCreateResponse), r
     gclient = gcm.users[test_client.user_id][1]
+    return TestUser(test_client, gclient)
+
+
+@synapse_integration
+@pytest.mark.asyncio
+async def test_subject(test_user: TestUser):
+    user = "@_gmail_bridge_someone_at_example.com:jif.one"
+    r = await test_user.nio_client.room_create(name="my room", invite=[user])
+    assert isinstance(r, nio.RoomCreateResponse), r
+    room_id = r.room_id
+    await test_user.nio_client.room_send(
+        room_id=room_id, message_type="m.room.message", content={
+            "msgtype": "m.text",
+            "body": "Hello world!"
+        }
+    )
+
+    async def mail_recvd_check() -> bool:
+        return len(test_user.gclient.recvd_mails) == 1
+
+    assert await keep_checking(mail_recvd_check), ("didn't recieve msg", await test_user.nio_client.c_room_members(r.room_id))
+    assert test_user.gclient.recvd_mails[0].content.subject == "my room"
+
+
+@synapse_integration
+@pytest.mark.asyncio
+async def test_send_recv_basic(test_user: TestUser):
+    r = await test_user.nio_client.room_create(name="my room", invite=['@_gmail_bridge_nnkit_at_protonmail.com:jif.one'])
+    assert isinstance(r, nio.RoomCreateResponse), r
 
     # -------------------------- Matrix Msg should be recvd on gmail
-    assert len(gclient.recvd_mails) == 0
+    assert len(test_user.gclient.recvd_mails) == 0
     await aio.sleep(2)
-    await test_client.room_send(
+    await test_user.nio_client.room_send(
         room_id=r.room_id, message_type="m.room.message", content={
             "msgtype": "m.text",
             "body": "Hello world!"
@@ -267,14 +301,14 @@ async def test_mock(mock_google, test_config: BridgeConfig, run_server, test_cli
     print("msg sent")
 
     async def mail_recvd_check() -> bool:
-        return len(gclient.recvd_mails) == 1
+        return len(test_user.gclient.recvd_mails) == 1
 
-    assert await keep_checking(mail_recvd_check), ("didn't recieve msg", await test_client.c_room_members(r.room_id))
+    assert await keep_checking(mail_recvd_check), ("didn't recieve msg", await test_user.nio_client.c_room_members(r.room_id))
 
     # -------------------------- Mail from new user should create new user in matrix
 
-    recvd = gclient.recvd_mails.pop()
-    gclient.new_mails.append(
+    recvd = test_user.gclient.recvd_mails.pop()
+    test_user.gclient.new_mails.append(
         Gmail(
             sender="my_guy@gmail.com",
             to=[recvd.to[0]],
@@ -285,7 +319,7 @@ async def test_mock(mock_google, test_config: BridgeConfig, run_server, test_cli
     )
 
     async def member_joined() -> bool:
-        members = await test_client.c_room_members(r.room_id)
+        members = await test_user.nio_client.c_room_members(r.room_id)
         return "@_gmail_bridge_my_guy_at_gmail.com:jif.one" in members
 
     assert await keep_checking(member_joined), "New User didn't join room"
