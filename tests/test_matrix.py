@@ -5,6 +5,7 @@ import uvicorn
 import httpx
 import uuid
 import app.nio_client
+from threading import Thread
 import time
 import os
 from app.config import get_config, BridgeConfig, override_config
@@ -174,9 +175,8 @@ class UvicornTestServer(uvicorn.Server):
 async def run_server(mock_google, setup_test_config: BridgeConfig, event_loop):
     from app.main import app
     server = UvicornTestServer(app, event_loop, host="0", port=setup_test_config.PORT)
-    # server = uvicorn.Server(uvicorn.Config(app, host="0", port=setup_test_config.PORT))
+
     await server.up()
-    # task = event_loop.create_task(server.serve())
     success = False
     for i in range(35):
         async with httpx.AsyncClient() as c:
@@ -189,11 +189,8 @@ async def run_server(mock_google, setup_test_config: BridgeConfig, event_loop):
                 continue
     if not success:
         raise RuntimeError("Can't start server")
-    # yield task
     yield server
     await server.down()
-    # task.cancel()
-    await aio.sleep(3)
 
 
 @pytest.fixture(scope="function")
@@ -205,8 +202,7 @@ async def test_client(setup_test_config: BridgeConfig) -> app.nio_client.NioClie
     password = "my_password"
     r = await client.register(localpart, password)
     assert not isinstance(r, nio.ErrorResponse), r
-    # client.user_id = user_id
-    # r = await client.login(password)
+
     client = app.nio_client.NioClient(
         homeserver_url=setup_test_config.HOMESERVER_URL, homeserver_name=setup_test_config.HOMESERVER_NAME, user=user_id
     )
