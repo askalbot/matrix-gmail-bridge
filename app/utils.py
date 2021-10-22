@@ -1,4 +1,5 @@
 import asyncio as aio
+import sys
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -112,11 +113,8 @@ class NamedTempFile:
 def custom_exception_handler(loop, context) -> None:
     # first, handle with default handler
     loop.default_exception_handler(context)
-    if 'exception' not in context:
-        logger.warning("unhandled exception occurred", context=context, stack_info=True)
-        return
-    logger.exception("unhandled exception occurred", context=context, stack_info=True)
-    loop.stop()
+    include_stack = sys.exc_info[0] == None
+    logger.exception("unhandled exception occurred", context=context, stack_info=include_stack)
 
 
 # https://quantlane.com/blog/ensure-asyncio-task-exceptions-get-logged/
