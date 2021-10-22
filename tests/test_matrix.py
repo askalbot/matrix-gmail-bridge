@@ -1,8 +1,10 @@
 import base64
 import nio
+from typing import Coroutine
 from typing import cast
 import uvicorn
 import httpx
+import math
 import uuid
 import app.nio_client
 from threading import Thread
@@ -222,6 +224,22 @@ async def test_client(test_config: BridgeConfig) -> app.nio_client.NioClient:
     return client
 
 
+async def keep_checking(
+    condition: Callable[[], Coroutine[None, None, bool]],
+    total_duration: float = 10.0,
+    gap_second: float = 0.3,
+) -> bool:
+    total_runs = math.ceil(total_duration / gap_second)
+    success = False
+    for i in range(total_runs):
+        if await condition():
+            success = True
+            break
+        else:
+            await aio.sleep(gap_second)
+    return success
+
+
 @synapse_integration
 @pytest.mark.asyncio
 async def test_mock(mock_google, test_config: BridgeConfig, run_server, test_client: app.nio_client.NioClient):
@@ -236,6 +254,8 @@ async def test_mock(mock_google, test_config: BridgeConfig, run_server, test_cli
     r = await test_client.room_create(name="my room", invite=['@_gmail_bridge_nnkit_at_protonmail.com:jif.one'])
     assert isinstance(r, nio.RoomCreateResponse), r
     gclient = gcm.users[test_client.user_id][1]
+
+    # -------------------------- Matrix Msg should be recvd on gmail
     assert len(gclient.recvd_mails) == 0
     await aio.sleep(2)
     await test_client.room_send(
@@ -245,14 +265,13 @@ async def test_mock(mock_google, test_config: BridgeConfig, run_server, test_cli
         }
     )
     print("msg sent")
-    success = False
-    for i in range(60):
-        if len(gclient.recvd_mails) == 1:
-            success = True
-            break
-        else:
-            await aio.sleep(0.3)
-    assert success, ("didn't recieve msg", await test_client.c_room_members(r.room_id))
+
+    async def mail_recvd_check() -> bool:
+        return len(gclient.recvd_mails) == 1
+
+    assert await keep_checking(mail_recvd_check), ("didn't recieve msg", await test_client.c_room_members(r.room_id))
+
+    # -------------------------- Mail from new user should create new user in matrix
 
     recvd = gclient.recvd_mails.pop()
     gclient.new_mails.append(
@@ -264,13 +283,9 @@ async def test_mock(mock_google, test_config: BridgeConfig, run_server, test_cli
             gmail_id=uuid.uuid4().hex,
         )
     )
-    success = False
-    for i in range(60):
+
+    async def member_joined() -> bool:
         members = await test_client.c_room_members(r.room_id)
-        if "@_gmail_bridge_my_guy_at_gmail.com:jif.one" in members:
-            success = True
-            break
-        else:
-            print(members)
-            await aio.sleep(0.3)
-    assert success, "New User didn't join room"
+        return "@_gmail_bridge_my_guy_at_gmail.com:jif.one" in members
+
+    assert await keep_checking(member_joined), "New User didn't join room"
