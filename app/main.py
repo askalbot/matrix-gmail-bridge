@@ -19,13 +19,12 @@ from .db import Db, MatrixKv
 from .event_handler import EventHandler
 from .prelude import *
 
-
 app = FastAPI()
 
 MAX_EVENT_HANDLE_TRY = 5
 
-
 event_handler: Optional[EventHandler] = None
+
 
 @app.on_event("startup")
 async def start():
@@ -34,14 +33,14 @@ async def start():
 
 	loop = aio.get_event_loop()
 	loop.set_exception_handler(u.custom_exception_handler)
-	config: BridgeConfig = get_config();
+	config: BridgeConfig = get_config()
 	matrix_client: NioClient = NioClient(homeserver_url=config.HOMESERVER_URL, homeserver_name=config.HOMESERVER_NAME)
 	await matrix_client.appservice_login(config.AS_TOKEN, config.BRIDGE_ID)
 
 	db = Db(MatrixKv(matrix_client, config.NAMESPACE_PREFIX + "state"), encryption_key=config.get_aes_key())
 	# await matrix.wait_till_connect()
 
-	gclient = await GmailClientManager.new(await db.all_active_users(), config.get_service_key())
+	gclient = await GmailClientManager.new(await db.all_active_users(), config.get_service_key(), config.GMAIL_RECHECK_SECONDS)
 	event_handler = EventHandler(gclient, matrix_client, db, config=config)
 	gclient.on_token_error = event_handler.handle_token_error
 
@@ -54,8 +53,6 @@ async def start():
 	gmail_task.add_done_callback(u.handle_task_result)
 
 	logger.debug("started")
-
-
 
 
 @app.put("/transactions/{tid}")
@@ -81,7 +78,9 @@ async def transaction(tid: str, body: Dict[str, Any], access_token: str):
 				if i == MAX_EVENT_HANDLE_TRY - 1:
 					raise GmailBridgeException(f"Cannot Handle Event After {i} retries, {event=}")
 				else:
-					logger.warning("Cannot Handle Event", will_retry_after=2**i, try_no=f"{i}/{MAX_EVENT_HANDLE_TRY}", exc_info=True)
+					logger.warning(
+						"Cannot Handle Event", will_retry_after=2**i, try_no=f"{i}/{MAX_EVENT_HANDLE_TRY}", exc_info=True
+					)
 					await aio.sleep(2**i)
 
 
@@ -99,11 +98,14 @@ async def get_user(user_id: str, access_token: str):
 	await event_handler.nio_client.c_ensure_appservice_user(user_id)
 	return JSONResponse({})
 
+
 @app.on_event("shutdown")
 async def stop():
 	gmail_task.cancel()
 
+
 if __name__ == "__main__":
+
 	class Command(Enum):
 		hs_config = auto()
 		bridge_config = auto()

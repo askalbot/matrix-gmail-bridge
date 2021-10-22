@@ -191,9 +191,9 @@ class GmailClient:
 		with NamedTempFile() as path:
 			path.write_bytes(message.as_bytes())
 			req = self.service.users.messages.send( # type: ignore
-				userId='me', # type: ignore
-				upload_file=str(path), # type: ignore
-				json=body, # type: ignore
+			 userId='me', # type: ignore
+			 upload_file=str(path), # type: ignore
+			 json=body, # type: ignore
 			)
 			req.upload_file_content_type = "message/rfc822"
 			return await self.ag.as_user(req)
@@ -246,7 +246,7 @@ class GmailClient:
 			after = dt.datetime.now() - INITIAL_REPLAY_DUR
 		else:
 			raw, _ = await self._fetch_mail(self.last_mail_id)
-			ts = (int(raw['internalDate'])/1000) - 1
+			ts = (int(raw['internalDate']) / 1000) - 1
 			after = dt.datetime.fromtimestamp(ts)
 
 		while True:
@@ -321,15 +321,14 @@ class GmailClient:
 @dataclass
 class GoogleAuth:
 	service_key: ServiceKey
-	oauth_client: GoogleOAuth2 = field(
-		init=False
-	)
+	oauth_client: GoogleOAuth2 = field(init=False)
 
 	def __post_init__(self):
-		self.default_factory=lambda: GoogleOAuth2(
+		self.default_factory = lambda: GoogleOAuth2(
 			self.service_key.client_id,
 			self.service_key.client_secret,
 		)
+
 	async def refresh_token(self, token: Token) -> Token:
 		raw_token = await self.oauth_client.refresh_token(token.refresh_token)
 		return token.refreshed_token(raw_token)
@@ -384,19 +383,20 @@ class GmailClientManager:
 	"""
 	users: Dict[MatrixUserId, Tuple[LoggedInUser, GmailClient]]
 	service_key: ServiceKey
-	recheck_seconds: int = 60*30
+	recheck_seconds: int = 60 * 30
 	on_token_error: Callable[[TokenExpiredException, User], Any] = default_exc_handler
 	oauth_client: GoogleAuth = field(init=False)
 	_logger: BoundLogger = field(default_factory=lambda: logger)
+
 	def __post_init__(self):
 		self.oauth_client = GoogleAuth(self.service_key)
 
 	@classmethod
-	async def new(cls, users: List[LoggedInUser], service_key: ServiceKey) -> 'GmailClientManager':
+	async def new(cls, users: List[LoggedInUser], service_key: ServiceKey, recheck_seconds: int) -> 'GmailClientManager':
 		_users = {}
 		for u in users:
 			_users[u.matrix_id] = (u, await GmailClient.from_user(u, service_key))
-		return GmailClientManager(_users, service_key)
+		return GmailClientManager(_users, service_key, recheck_seconds=recheck_seconds)
 
 	def _get_user(self, mxid: str) -> Optional[User]:
 		if mxid not in self.users:
@@ -462,4 +462,3 @@ class GmailClientManager:
 			await client.reply_to_thread(thread_id, message.content, message.to, message.cc)
 
 		return thread_id
-

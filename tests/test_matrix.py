@@ -25,7 +25,7 @@ def event_loop():
 
 
 @pytest.fixture(scope='session')
-def setup_test_config() -> BridgeConfig:
+def test_config() -> BridgeConfig:
     # test_config = BridgeConfig(
     #     AES_KEY=base64.b64encode(os.urandom(16)).decode(),
     #     AS_TOKEN="test_as_token",
@@ -38,6 +38,7 @@ def setup_test_config() -> BridgeConfig:
     # )
     test_config = BridgeConfig.example_config()
     test_config.HOMESERVER_NAME = "jif.one"
+    test_config.GMAIL_RECHECK_SECONDS = 1
     override_config(test_config)
     return test_config
 
@@ -61,13 +62,22 @@ synapse_integration = pytest.mark.skipif(
 
 
 @dataclass
+class RecvdMail:
+    content: MsgContent
+    to: List[str]
+    thread_id: str
+    cc: List[str] = field(default_factory=list)
+    first_in_thread: bool = False
+
+
+@dataclass
 class MockGmailClient:
     user: LoggedInUser
     email_id: str
     last_mail_id: Optional[str] = None
     email_name: Optional[str] = None
     new_mails: List[Gmail] = field(default_factory=list)
-    recvd_mails: List = field(default_factory=list)
+    recvd_mails: List[RecvdMail] = field(default_factory=list)
 
     _logger: BoundLogger = field(default_factory=lambda: Logger("gmail-client"))
 
@@ -83,11 +93,12 @@ class MockGmailClient:
             yield i
 
     async def reply_to_thread(self, thread_id: str, content: MsgContent, to: List[str], cc: List[str] = []):
-        self.recvd_mails.append((content, to, cc, thread_id))
+        self.recvd_mails.append(RecvdMail(content, to, thread_id, cc, False))
 
     async def start_new_thread(self, content: MsgContent, to: List[str], cc: List[str] = []) -> str:
-        self.recvd_mails.append((content, to, cc, None))
-        return uuid.uuid4().hex
+        thread_id = uuid.uuid4().hex
+        self.recvd_mails.append(RecvdMail(content, to, thread_id, cc, True))
+        return thread_id
 
 
 @dataclass
@@ -172,16 +183,16 @@ class UvicornTestServer(uvicorn.Server):
 
 
 @pytest.fixture(scope="session")
-async def run_server(mock_google, setup_test_config: BridgeConfig, event_loop):
+async def run_server(mock_google, test_config: BridgeConfig, event_loop):
     from app.main import app
-    server = UvicornTestServer(app, event_loop, host="0", port=setup_test_config.PORT)
+    server = UvicornTestServer(app, event_loop, host="0", port=test_config.PORT)
 
     await server.up()
     success = False
     for i in range(35):
         async with httpx.AsyncClient() as c:
             try:
-                await c.get(f"http://localhost:{setup_test_config.PORT}")
+                await c.get(f"http://localhost:{test_config.PORT}")
                 success = True
                 break
             except httpx.HTTPError:
@@ -194,8 +205,8 @@ async def run_server(mock_google, setup_test_config: BridgeConfig, event_loop):
 
 
 @pytest.fixture(scope="function")
-async def test_client(setup_test_config: BridgeConfig) -> app.nio_client.NioClient:
-    client = nio.AsyncClient(homeserver=setup_test_config.HOMESERVER_URL)
+async def test_client(test_config: BridgeConfig) -> app.nio_client.NioClient:
+    client = nio.AsyncClient(homeserver=test_config.HOMESERVER_URL)
 
     localpart = f"new_user{uuid.uuid4().hex}"
     user_id = f"@{localpart}:jif.one"
@@ -204,7 +215,7 @@ async def test_client(setup_test_config: BridgeConfig) -> app.nio_client.NioClie
     assert not isinstance(r, nio.ErrorResponse), r
 
     client = app.nio_client.NioClient(
-        homeserver_url=setup_test_config.HOMESERVER_URL, homeserver_name=setup_test_config.HOMESERVER_NAME, user=user_id
+        homeserver_url=test_config.HOMESERVER_URL, homeserver_name=test_config.HOMESERVER_NAME, user=user_id
     )
     r = await client.login(password)
     assert isinstance(r, nio.LoginResponse), r
@@ -213,35 +224,53 @@ async def test_client(setup_test_config: BridgeConfig) -> app.nio_client.NioClie
 
 @synapse_integration
 @pytest.mark.asyncio
-async def test_mock(mock_google, setup_test_config: BridgeConfig, run_server, test_client: app.nio_client.NioClient):
-    auth = MockGoogleAuth(setup_test_config.get_service_key())
-
+async def test_mock(mock_google, test_config: BridgeConfig, run_server, test_client: app.nio_client.NioClient):
+    auth = MockGoogleAuth(test_config.get_service_key())
     from app.main import event_handler
-    # gcm = await GmailClientManager.new([], setup_test_config.get_service_key())
-    assert event_handler is not None
+
+    assert event_handler is not None, "event handler not set by app startup"
     gcm = event_handler.gclient
     gcm.users = cast(Dict[MatrixUserId, Tuple[LoggedInUser, MockGmailClient]], gcm.users) # type: ignore
 
     await gcm.upsert_user(User(matrix_id=test_client.user_id).logged_in(token=await auth.get_access_token("some code")))
     r = await test_client.room_create(name="my room", invite=['@_gmail_bridge_nnkit_at_protonmail.com:jif.one'])
     assert isinstance(r, nio.RoomCreateResponse), r
-    a = gcm.users[test_client.user_id][1]
-    assert len(a.recvd_mails) == 0
+    gclient = gcm.users[test_client.user_id][1]
+    assert len(gclient.recvd_mails) == 0
     await aio.sleep(2)
     await test_client.room_send(
-        # Watch out! If you join an old room you'll see lots of old messages
-        room_id=r.room_id,
-        message_type="m.room.message",
-        content={
+        room_id=r.room_id, message_type="m.room.message", content={
             "msgtype": "m.text",
             "body": "Hello world!"
         }
     )
     print("msg sent")
+    success = False
     for i in range(60):
-        if len(a.recvd_mails) == 1:
-            open("/tmp/a.txt", "w").write("SUCCESS")
-            return
+        if len(gclient.recvd_mails) == 1:
+            success = True
+            break
         else:
             await aio.sleep(0.3)
-    assert False, ("didn't recieve msg", await test_client.c_room_members(r.room_id))
+    assert success, ("didn't recieve msg", await test_client.c_room_members(r.room_id))
+
+    recvd = gclient.recvd_mails.pop()
+    gclient.new_mails.append(
+        Gmail(
+            sender="my_guy@gmail.com",
+            to=[recvd.to[0]],
+            content=MsgContent(body="body", html_body="html_body", subject="subject"),
+            thread_id=recvd.thread_id,
+            gmail_id=uuid.uuid4().hex,
+        )
+    )
+    success = False
+    for i in range(60):
+        members = await test_client.c_room_members(r.room_id)
+        if "@_gmail_bridge_my_guy_at_gmail.com:jif.one" in members:
+            success = True
+            break
+        else:
+            print(members)
+            await aio.sleep(0.3)
+    assert success, "New User didn't join room"
