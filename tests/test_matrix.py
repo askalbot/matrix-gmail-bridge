@@ -262,13 +262,17 @@ async def test_user(test_config: BridgeConfig, mock_google, run_server, test_cli
     return TestUser(test_client, gclient)
 
 
+async def new_room(client: nio.AsyncClient, room_name: str = "test_room", invite: List[str] = []) -> str:
+    r = await client.room_create(name=room_name, invite=invite)
+    assert isinstance(r, nio.RoomCreateResponse), r
+    return r.room_id
+
+
 @synapse_integration
 @pytest.mark.asyncio
 async def test_subject(test_user: TestUser):
     user = "@_gmail_bridge_someone_at_example.com:jif.one"
-    r = await test_user.nio_client.room_create(name="my room", invite=[user])
-    assert isinstance(r, nio.RoomCreateResponse), r
-    room_id = r.room_id
+    room_id = await new_room(test_user.nio_client, room_name="my room subject", invite=[user])
     await test_user.nio_client.room_send(
         room_id=room_id, message_type="m.room.message", content={
             "msgtype": "m.text",
@@ -279,21 +283,20 @@ async def test_subject(test_user: TestUser):
     async def mail_recvd_check() -> bool:
         return len(test_user.gclient.recvd_mails) == 1
 
-    assert await keep_checking(mail_recvd_check), ("didn't recieve msg", await test_user.nio_client.c_room_members(r.room_id))
-    assert test_user.gclient.recvd_mails[0].content.subject == "my room"
+    assert await keep_checking(mail_recvd_check), ("didn't recieve msg", await test_user.nio_client.c_room_members(room_id))
+    assert test_user.gclient.recvd_mails[0].content.subject =="my room subject" 
 
 
 @synapse_integration
 @pytest.mark.asyncio
 async def test_send_recv_basic(test_user: TestUser):
-    r = await test_user.nio_client.room_create(name="my room", invite=['@_gmail_bridge_nnkit_at_protonmail.com:jif.one'])
-    assert isinstance(r, nio.RoomCreateResponse), r
+    room_id = await new_room(test_user.nio_client, invite=['@_gmail_bridge_nnkit_at_protonmail.com:jif.one'])
 
     # -------------------------- Matrix Msg should be recvd on gmail
     assert len(test_user.gclient.recvd_mails) == 0
     await aio.sleep(2)
     await test_user.nio_client.room_send(
-        room_id=r.room_id, message_type="m.room.message", content={
+        room_id=room_id, message_type="m.room.message", content={
             "msgtype": "m.text",
             "body": "Hello world!"
         }
@@ -303,7 +306,7 @@ async def test_send_recv_basic(test_user: TestUser):
     async def mail_recvd_check() -> bool:
         return len(test_user.gclient.recvd_mails) == 1
 
-    assert await keep_checking(mail_recvd_check), ("didn't recieve msg", await test_user.nio_client.c_room_members(r.room_id))
+    assert await keep_checking(mail_recvd_check), ("didn't recieve msg", await test_user.nio_client.c_room_members(room_id))
 
     # -------------------------- Mail from new user should create new user in matrix
 
@@ -319,7 +322,7 @@ async def test_send_recv_basic(test_user: TestUser):
     )
 
     async def member_joined() -> bool:
-        members = await test_user.nio_client.c_room_members(r.room_id)
+        members = await test_user.nio_client.c_room_members(room_id)
         return "@_gmail_bridge_my_guy_at_gmail.com:jif.one" in members
 
     assert await keep_checking(member_joined), "New User didn't join room"
