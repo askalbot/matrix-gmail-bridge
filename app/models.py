@@ -66,9 +66,9 @@ class MsgContent(BaseModel):
 
 
 class AuthState(Enum):
-	logged_out = auto()
-	waiting_for_token = auto()
-	logged_in = auto()
+	logged_out = "logged_out"
+	waiting_for_token = "waiting_for_token"
+	logged_in = "logged_in"
 
 
 class Token(BaseModel):
