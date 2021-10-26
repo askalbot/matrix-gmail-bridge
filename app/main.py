@@ -123,4 +123,4 @@ if __name__ == "__main__":
 		print(get_config().get_hs_resistration_config())
 	else:
 		import uvicorn
-		uvicorn.run(app, port=CONFIG.PORT, host='0.0.0.0') # type: ignore
+		uvicorn.run(app, port=get_config().PORT, host='0.0.0.0') # type: ignore

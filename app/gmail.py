@@ -324,7 +324,7 @@ class GoogleAuth:
 	oauth_client: GoogleOAuth2 = field(init=False)
 
 	def __post_init__(self):
-		self.default_factory = lambda: GoogleOAuth2(
+		self.oauth_client = GoogleOAuth2(
 			self.service_key.client_id,
 			self.service_key.client_secret,
 		)
