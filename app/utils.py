@@ -113,7 +113,7 @@ class NamedTempFile:
 def custom_exception_handler(loop, context) -> None:
     # first, handle with default handler
     loop.default_exception_handler(context)
-    include_stack = sys.exc_info[0] == None # type: ignore
+    include_stack = sys.exc_info()[0] == None
     logger.exception("unhandled exception occurred", context=context, stack_info=include_stack)
 
 
