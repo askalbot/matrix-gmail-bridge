@@ -10,7 +10,6 @@ from starlette.responses import JSONResponse
 from dataclasses import dataclass
 
 from app.gmail import GmailClientManager
-from app.utils import is_valid_email_mxid
 import datargs
 
 from . import utils as u
@@ -20,13 +19,12 @@ from .db import Db, MatrixKv
 from .event_handler import EventHandler
 from .prelude import *
 
-
 app = FastAPI()
 
 MAX_EVENT_HANDLE_TRY = 5
 
-
 event_handler: Optional[EventHandler] = None
+
 
 @app.on_event("startup")
 async def start():
@@ -35,15 +33,15 @@ async def start():
 
 	loop = aio.get_event_loop()
 	loop.set_exception_handler(u.custom_exception_handler)
-	
-	matrix_client: NioClient = NioClient(homeserver_url=CONFIG.HOMESERVER_URL, homeserver_name=CONFIG.HOMESERVER_NAME)
-	await matrix_client.appservice_login(CONFIG.AS_TOKEN, CONFIG.BRIDGE_ID)
+	config: BridgeConfig = get_config()
+	matrix_client: NioClient = NioClient(homeserver_url=config.HOMESERVER_URL, homeserver_name=config.HOMESERVER_NAME)
+	await matrix_client.appservice_login(config.AS_TOKEN, config.BRIDGE_ID)
 
-	db = Db(MatrixKv(matrix_client, CONFIG.NAMESPACE_PREFIX + "state"))
+	db = Db(MatrixKv(matrix_client, config.NAMESPACE_PREFIX + "state"), encryption_key=config.get_aes_key())
 	# await matrix.wait_till_connect()
 
-	gclient = await GmailClientManager.new(await db.all_active_users())
-	event_handler = EventHandler(gclient, matrix_client, db)
+	gclient = await GmailClientManager.new(await db.all_active_users(), config.get_service_key(), config.GMAIL_RECHECK_SECONDS)
+	event_handler = EventHandler(gclient, matrix_client, db, config=config)
 	gclient.on_token_error = event_handler.handle_token_error
 
 	# refresh tokens
@@ -57,11 +55,10 @@ async def start():
 	logger.debug("started")
 
 
-
-
 @app.put("/transactions/{tid}")
 async def transaction(tid: str, body: Dict[str, Any], access_token: str):
-	if not hmac.compare_digest(access_token, CONFIG.HS_TOKEN):
+	assert event_handler is not None
+	if not hmac.compare_digest(access_token, event_handler.config.HS_TOKEN):
 		return JSONResponse({"errcode": "M_FORBIDDEN"}, status_code=fastapi.status.HTTP_403_FORBIDDEN)
 
 	logger.info("transaction", tid=tid, events=len(body['events']))
@@ -81,16 +78,19 @@ async def transaction(tid: str, body: Dict[str, Any], access_token: str):
 				if i == MAX_EVENT_HANDLE_TRY - 1:
 					raise GmailBridgeException(f"Cannot Handle Event After {i} retries, {event=}")
 				else:
-					logger.warning("Cannot Handle Event", will_retry_after=2**i, try_no=f"{i}/{MAX_EVENT_HANDLE_TRY}", exc_info=True)
+					logger.warning(
+						"Cannot Handle Event", will_retry_after=2**i, try_no=f"{i}/{MAX_EVENT_HANDLE_TRY}", exc_info=True
+					)
 					await aio.sleep(2**i)
 
 
 @app.get("/users/{user_id}")
 async def get_user(user_id: str, access_token: str):
-	if access_token != CONFIG.HS_TOKEN:
+	assert event_handler is not None
+	if access_token != event_handler.config.HS_TOKEN:
 		return JSONResponse({"errcode": "M_FORBIDDEN"}, status_code=fastapi.status.HTTP_403_FORBIDDEN)
 
-	if not is_valid_email_mxid(user_id):
+	if not event_handler.util.is_valid_email_mxid(user_id):
 		logger.warning("request for invalid user", user_id=user_id)
 		return JSONResponse({"errcode": "gmail.NOT_VALID_EMAIL"}, 404)
 
@@ -98,11 +98,14 @@ async def get_user(user_id: str, access_token: str):
 	await event_handler.nio_client.c_ensure_appservice_user(user_id)
 	return JSONResponse({})
 
+
 @app.on_event("shutdown")
 async def stop():
 	gmail_task.cancel()
 
+
 if __name__ == "__main__":
+
 	class Command(Enum):
 		hs_config = auto()
 		bridge_config = auto()
@@ -115,9 +118,9 @@ if __name__ == "__main__":
 	arg = datargs.parse(Args)
 
 	if arg.command == Command.bridge_config:
-		print(Config.get_sample_yaml())
+		print(BridgeConfig.get_sample_yaml())
 	elif arg.command == Command.hs_config:
-		print(CONFIG.get_hs_resistration_config())
+		print(get_config().get_hs_resistration_config())
 	else:
 		import uvicorn
 		uvicorn.run(app, port=CONFIG.PORT, host='0.0.0.0') # type: ignore

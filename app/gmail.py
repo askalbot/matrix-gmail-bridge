@@ -23,7 +23,6 @@ from httpx_oauth.clients.google import GoogleOAuth2, PROFILE_ENDPOINT
 
 from app.utils import NamedTempFile
 
-from .config import CONFIG
 from .models import Attachment, LoggedInUser, MsgContent, AuthState, User, Token
 from . import utils as u
 from .prelude import *
@@ -43,7 +42,7 @@ class GmailUserNotRegistered(Exception):
 
 
 # TODO: remove global
-SERVICE_KEY = CONFIG.get_service_key()
+# SERVICE_KEY = CONFIG.get_service_key()
 
 _T = TypeVar("_T", bound='_BaseGmail')
 
@@ -89,15 +88,15 @@ class GmailClient:
 			await self.ag.active_session.close()
 
 	@classmethod
-	async def from_user(cls, user_state: LoggedInUser) -> 'GmailClient':
+	async def from_user(cls, user_state: LoggedInUser, service_key: ServiceKey) -> 'GmailClient':
 		ag = _aiogoogle.Aiogoogle(
 			user_creds={
 				"access_token": user_state.token.access_token,
 				"refresh_token": user_state.token.refresh_token,
 			},
 			client_creds={
-				"client_id": SERVICE_KEY.client_id,
-				"client_secret": SERVICE_KEY.client_secret,
+				"client_id": service_key.client_id,
+				"client_secret": service_key.client_secret,
 			}
 		)
 		service = await ag.discover('gmail', 'v1')
@@ -192,9 +191,9 @@ class GmailClient:
 		with NamedTempFile() as path:
 			path.write_bytes(message.as_bytes())
 			req = self.service.users.messages.send( # type: ignore
-				userId='me', # type: ignore
-				upload_file=str(path), # type: ignore
-				json=body, # type: ignore
+			 userId='me', # type: ignore
+			 upload_file=str(path), # type: ignore
+			 json=body, # type: ignore
 			)
 			req.upload_file_content_type = "message/rfc822"
 			return await self.ag.as_user(req)
@@ -247,7 +246,7 @@ class GmailClient:
 			after = dt.datetime.now() - INITIAL_REPLAY_DUR
 		else:
 			raw, _ = await self._fetch_mail(self.last_mail_id)
-			ts = (int(raw['internalDate'])/1000) - 1
+			ts = (int(raw['internalDate']) / 1000) - 1
 			after = dt.datetime.fromtimestamp(ts)
 
 		while True:
@@ -321,12 +320,14 @@ class GmailClient:
 
 @dataclass
 class GoogleAuth:
-	oauth_client: GoogleOAuth2 = field(
-		default_factory=lambda: GoogleOAuth2(
-			SERVICE_KEY.client_id,
-			SERVICE_KEY.client_secret,
+	service_key: ServiceKey
+	oauth_client: GoogleOAuth2 = field(init=False)
+
+	def __post_init__(self):
+		self.default_factory = lambda: GoogleOAuth2(
+			self.service_key.client_id,
+			self.service_key.client_secret,
 		)
-	)
 
 	async def refresh_token(self, token: Token) -> Token:
 		raw_token = await self.oauth_client.refresh_token(token.refresh_token)
@@ -335,13 +336,13 @@ class GoogleAuth:
 	async def get_oauth_flow_url(self) -> str:
 		assert self.oauth_client.base_scopes is not None
 		return await self.oauth_client.get_authorization_url(
-			SERVICE_KEY.redirect_uri,
+			self.service_key.redirect_uri,
 			scope=EMAIL_SCOPES + self.oauth_client.base_scopes,
 		)
 
 	async def get_access_token(self, token_code: str) -> Token:
 		try:
-			raw_tokens = await self.oauth_client.get_access_token(token_code, SERVICE_KEY.redirect_uri)
+			raw_tokens = await self.oauth_client.get_access_token(token_code, self.service_key.redirect_uri)
 		except GetAccessTokenError as e:
 			raise GmailTokenException from e
 
@@ -381,16 +382,21 @@ class GmailClientManager:
 		use `await new(users)` to create an instance
 	"""
 	users: Dict[MatrixUserId, Tuple[LoggedInUser, GmailClient]]
+	service_key: ServiceKey
+	recheck_seconds: int = 60 * 30
 	on_token_error: Callable[[TokenExpiredException, User], Any] = default_exc_handler
-	oauth_client: GoogleAuth = field(init=False, default_factory=GoogleAuth)
+	oauth_client: GoogleAuth = field(init=False)
 	_logger: BoundLogger = field(default_factory=lambda: logger)
 
+	def __post_init__(self):
+		self.oauth_client = GoogleAuth(self.service_key)
+
 	@classmethod
-	async def new(cls, users: List[LoggedInUser]) -> 'GmailClientManager':
+	async def new(cls, users: List[LoggedInUser], service_key: ServiceKey, recheck_seconds: int) -> 'GmailClientManager':
 		_users = {}
 		for u in users:
-			_users[u.matrix_id] = (u, await GmailClient.from_user(u))
-		return GmailClientManager(_users)
+			_users[u.matrix_id] = (u, await GmailClient.from_user(u, service_key))
+		return GmailClientManager(_users, service_key, recheck_seconds=recheck_seconds)
 
 	def _get_user(self, mxid: str) -> Optional[User]:
 		if mxid not in self.users:
@@ -405,7 +411,7 @@ class GmailClientManager:
 	async def upsert_user(self, user: LoggedInUser):
 		if user.matrix_id in self.users:
 			await self.remove_user(user.matrix_id)
-		self.users[user.matrix_id] = (user, await GmailClient.from_user(user))
+		self.users[user.matrix_id] = (user, await GmailClient.from_user(user, self.service_key))
 
 	async def remove_user(self, user_matrix_id: str):
 		_, client = self.users.pop(user_matrix_id)
@@ -435,7 +441,7 @@ class GmailClientManager:
 						await self.on_token_error(TokenExpiredException(e), user)
 
 				retry = 0
-				await aio.sleep(CONFIG.GMAIL_RECHECK_SECONDS)
+				await aio.sleep(self.recheck_seconds)
 
 			except Exception as e:
 				retry += 1
@@ -456,4 +462,3 @@ class GmailClientManager:
 			await client.reply_to_thread(thread_id, message.content, message.to, message.cc)
 
 		return thread_id
-

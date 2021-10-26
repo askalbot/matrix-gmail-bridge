@@ -1,5 +1,4 @@
 from io import BytesIO
-from app.config import CONFIG
 import copy
 from enum import Enum, auto
 from functools import cached_property
@@ -105,7 +104,7 @@ class User(BaseModel):
 	"""
 	matrix_id: str
 
-	email_name: Optional[str] = CONFIG.DEFAULT_EMAIL_NAME
+	email_name: Optional[str] = None
 	last_mail_id: Optional[str] = None
 
 	auth_state: AuthState = AuthState.logged_out

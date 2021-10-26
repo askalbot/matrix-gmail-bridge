@@ -6,7 +6,7 @@ import base64
 
 
 
-class Config(BaseSettings):
+class BridgeConfig(BaseSettings):
 	# TODO: custom validation
 
 	# AES kEY
@@ -108,12 +108,12 @@ namespaces:
 		return rv
 
 	@classmethod
-	def from_yaml(cls, content: str) -> 'Config':
+	def from_yaml(cls, content: str) -> 'BridgeConfig':
 		body = yaml.load(content, Loader=yaml.FullLoader)
 		return cls(**body)
 
 	@classmethod
-	def example_config(cls) -> 'Config':
+	def example_config(cls) -> 'BridgeConfig':
 		body = {}
 		props = cls.schema()['properties']
 		for name, field in props.items():
@@ -124,8 +124,17 @@ namespaces:
 			body[name] = value
 		return cls(**body)
 
+# to support overrride in tests
+_runtime_config_override: Optional[BridgeConfig] = None
+def get_config() -> BridgeConfig:
+	if _runtime_config_override is not None:
+		return _runtime_config_override
+	else:
+		if CONFIG_PATH.exists():
+			return BridgeConfig.from_yaml(CONFIG_PATH.read_text())
+		else:
+			raise FileNotFoundError(f"{CONFIG_PATH} does not exist. Provide path to config using GMAIL_BRIDGE_CONFIG_PATH env var")
 
-if CONFIG_PATH.exists():
-	CONFIG =Config.from_yaml(CONFIG_PATH.read_text())
-else:
-	CONFIG = Config.example_config()
+def override_config(config: BridgeConfig):
+	global _runtime_config_override
+	_runtime_config_override = config

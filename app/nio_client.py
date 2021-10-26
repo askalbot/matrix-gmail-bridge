@@ -141,12 +141,11 @@ class NioClient(AsyncClient):
 		raise GmailBridgeException(f"Unexpected Response from Nio Library {resp=}")
 
 	async def c_ensure_appservice_user(self, mxid: str):
-		assert u.is_bot_mxid(mxid)
 
 		if await self.c_user_exists(mxid):
 			return
 
-		localpart = u.extract_mxid_localpart(mxid)
+		localpart = u.extract_mxid_localpart(mxid, self.homeserver_name)
 		content = {
 			"type": "m.login.application_service",
 			# "@test:localhost" -> "test" (Can't register with a full mxid.)
