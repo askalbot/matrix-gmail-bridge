@@ -266,7 +266,7 @@ class GmailClient:
 	async def _fetch_mail(self, gmail_id: str) -> Tuple[dict, Gmail]:
 		req = self.service.users.messages.get(userId='me', id=gmail_id, format='raw') # type: ignore
 		api_msg = await self.ag.as_user(req)
-		parsed_mail = mailparser.parse_from_string(base64.urlsafe_b64decode(api_msg['raw']).decode())
+		parsed_mail = mailparser.parse_from_bytes(base64.urlsafe_b64decode(api_msg['raw']))
 		mail = self._parse_msg(api_msg, parsed_mail)
 
 		return api_msg, mail
