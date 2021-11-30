@@ -8,3 +8,4 @@ RUN --mount=type=cache,target=/root/.cache/pip poetry config virtualenvs.create 
 
 COPY ./app /app/app
 CMD ["python3", "-m", "app.main"]
+
