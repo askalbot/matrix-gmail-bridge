@@ -2,7 +2,7 @@
 A Matrix-Gmail Puppet Bridge. 
 
 # Documentation
-In Progress
+Read at: https://askalbot.github.io/matrix-gmail-bridge/
 
 # Development Setup
 - Install [tmuxp](https://github.com/tmux-python/tmuxp) and [poetry](https://python-poetry.org/).
