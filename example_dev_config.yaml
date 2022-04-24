@@ -1,0 +1,25 @@
+# Required
+gmail_client_id: 
+gmail_client_secret: 
+
+# No need to change
+AS_TOKEN: secure-string-token
+HS_TOKEN: secure-different-string-token
+
+# (optional) default email display name to use for sending mails.
+DEFAULT_EMAIL_NAME: null
+GMAIL_RECHECK_SECONDS: 10
+
+# Id to use for this matrix bridge
+BRIDGE_ID: gmail
+BRIDGE_URL: http://localhost
+PORT: 8010
+
+# Bridge Localpart
+SENDER_LOCALPART: appservice-gmail
+NAMESPACE_PREFIX: _gmail_bridge_
+
+# url by which bridge can access homeserver
+HOMESERVER_URL: http://localhost:8008
+HOMESERVER_NAME: dev.matrix
+

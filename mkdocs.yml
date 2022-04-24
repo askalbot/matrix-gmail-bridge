@@ -1,0 +1,15 @@
+site_name: Matrix Gmail Bridge
+theme:
+  name: material
+repo_url: https://github.com/askalbot/matrix-gmail-bridge
+nav:
+  - Introduction: "index.md"
+  - Quickstart: "quickstart.md"
+  - Behaviour: "behaviour.md"
+  - Configuration: "configuration.md"
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      # auto_title: true
+  - pymdownx.superfences

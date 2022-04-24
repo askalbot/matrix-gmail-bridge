@@ -4,7 +4,6 @@ from enum import Enum, auto
 from functools import cached_property
 from pydantic import BaseModel, validator, Field
 
-
 from .prelude import *
 from typing import Final, Literal, cast
 
@@ -32,9 +31,10 @@ class Attachment(BaseModel):
 	# TODO: make SpooledTempFile
 	content: bytes
 	name: str
+
 	class Config:
 		arbitrary_types_allowed = True
-		keep_untouched = (cached_property,)
+		keep_untouched = (cached_property, )
 
 	def content_io(self) -> BytesIO:
 		return BytesIO(self.content)
@@ -76,7 +76,6 @@ class Token(BaseModel):
 	refresh_token: str
 	email: str
 	expiry: dt.datetime
-	raw: dict
 
 	@classmethod
 	def from_raw(cls, raw: dict) -> 'Token':
@@ -85,14 +84,7 @@ class Token(BaseModel):
 			refresh_token=raw['refresh_token'],
 			email=raw['email'],
 			expiry=dt.datetime.fromtimestamp(raw['expires_at'], tz=dt.timezone.utc),
-			raw=raw,
 		)
-
-	def refreshed_token(self, refresh_result: dict) -> 'Token':
-		raw = self.raw
-		raw.update(refresh_result)
-		token = Token.from_raw(self.raw)
-		return token
 
 	def is_expired(self):
 		return dt.datetime.now(tz=dt.timezone.utc) > self.expiry
@@ -121,14 +113,17 @@ class User(BaseModel):
 		if self.auth_state == AuthState.logged_in:
 			return LoggedInUser.parse_obj(self)
 		return self
-	
-	def logged_in(self, token: Token, email_address: Optional[str] = None) -> 'LoggedInUser':
+
+	def logged_in(self, token: Token) -> 'LoggedInUser':
 		user = self.copy()
-		user.email_address = email_address
-		user.token = token
-		user.auth_state = AuthState.logged_in
-		u = User.parse_obj(user)
-		return LoggedInUser.parse_obj(u)
+		return LoggedInUser(
+			matrix_id=self.matrix_id,
+			email_name=self.email_name,
+			last_mail_id=self.last_mail_id,
+			auth_state=AuthState.logged_in,
+			token=token,
+			email_address=self.email_address or token.email,
+		)
 
 
 class LoggedInUser(User):

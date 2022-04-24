@@ -8,7 +8,10 @@
             "name": "Run Server",
             "type": "python",
             "request": "launch",
-            "module": "app.main",
+            "module": "app",
+            "env": {
+                "GMAIL_BRIDGE_CONFIG_PATH": "${workspaceFolder}/dev_config.yaml",
+            },
             "args": [
                 "run_server"
             ],

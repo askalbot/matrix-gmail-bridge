@@ -5,56 +5,80 @@ from pydantic import BaseSettings, Field
 import base64
 
 
-
 class BridgeConfig(BaseSettings):
 	# TODO: custom validation
 
-	# AES kEY
-	AES_KEY: str = Field(
-		description="16 byte length base64 encoded aes key. used to encrypt gmail tokens of users.",
-		example="1d2rouuI7QxJqzXVfk5NBw=="
-	)
-
 	# Token
-	AS_TOKEN: str = Field(description="token to use for making request with homeserver", example="secure-string-token")
+	AS_TOKEN: str = Field(
+		description="token to use for making request with homeserver",
+		example="secure-string-token",
+	)
 	HS_TOKEN: str = Field(
-		description="token to verify when recieving events from homeserver", example="secure-different-string-token"
+		description="token to verify when recieving events from homeserver",
+		example="secure-different-string-token",
 	)
 
 	# GMAIL
 	DEFAULT_EMAIL_NAME: Optional[str] = Field(
-		description="(optional) email display name to use for sending mails. ", default=None
+		description="(optional) default email display name to use for sending mails. ",
+		default=None,
 	)
-	GMAIL_RECHECK_SECONDS: int = Field(description="Interval between requesting gmail api for new mails", default=5 * 60)
+	GMAIL_RECHECK_SECONDS: int = Field(
+		description="Interval between polling gmail api for new mails",
+		default=5 * 60,
+	)
 
 	# BRIDGE
-	BRIDGE_ID: str = Field(description="Id to use for this bridge", default="gmail")
-	BRIDGE_URL: str = Field(
-		description="url(without port) by which homeserver can access the bridge", default="http://localhost"
+	BRIDGE_ID: str = Field(
+		description="Id to use for this matrix bridge",
+		default="gmail",
 	)
-	PORT: int = Field(description="port to start the bridge on", default=8010)
-	SENDER_LOCALPART: str = Field(description="Bridge Localport", default="appservice-gmail")
+	BRIDGE_URL: str = Field(
+		description="url(without port) by which homeserver can access the bridge",
+		default="http://localhost",
+	)
+	PORT: int = Field(
+		description="port to start the bridge on",
+		default=8010,
+	)
+	SENDER_LOCALPART: str = Field(
+		description="Bridge Localpart",
+		default="appservice-gmail",
+	)
 	NAMESPACE_PREFIX: str = Field(
-		description="prefix to use for room aliases and users created by this bridge", default="_gmail_bridge_"
+		description="prefix to use for room aliases and users created by this bridge",
+		default="_gmail_bridge_",
 	)
 
 	# HOMESERVER
-	HOMESERVER_URL: str = Field(description="url by which bridge can access homeserver", default="http://localhost:8008")
-	HOMESERVER_NAME: str = Field(description="Name of homeserver", example="example.com")
+	HOMESERVER_URL: str = Field(
+		description="url by which bridge can access homeserver",
+		default="http://localhost:8008",
+	)
+
+	ADMIN_USER: str = Field(
+		description="url by which bridge can access homeserver",
+		default="http://localhost:8008",
+	)
+
+	HOMESERVER_NAME: str = Field(
+		description="Name of homeserver",
+		example="example.com",
+	)
+
+	HOST: str = Field(
+		description='hostname to listen on',
+		default='localhost',
+	)
 
 	# GMAIL SERVICE
 	gmail_client_secret: str = Field(example="ababaabababababababab")
 	gmail_client_id: str = Field(example="sdf-sdfkjsdf-")
-	gmail_project_id: str = Field(example="project-myproject-abc")
-
-	def get_aes_key(self) -> bytes:
-		return base64.b64decode(self.AES_KEY)
 
 	def get_service_key(self) -> ServiceKey:
 		return ServiceKey(
 			client_secret=self.gmail_client_secret,
 			client_id=self.gmail_client_id,
-			project_id=self.gmail_project_id,
 		)
 
 	def export_config_json(self) -> str:
@@ -124,8 +148,11 @@ namespaces:
 			body[name] = value
 		return cls(**body)
 
+
 # to support overrride in tests
 _runtime_config_override: Optional[BridgeConfig] = None
+
+
 def get_config() -> BridgeConfig:
 	if _runtime_config_override is not None:
 		return _runtime_config_override
@@ -133,7 +160,10 @@ def get_config() -> BridgeConfig:
 		if CONFIG_PATH.exists():
 			return BridgeConfig.from_yaml(CONFIG_PATH.read_text())
 		else:
-			raise FileNotFoundError(f"{CONFIG_PATH} does not exist. Provide path to config using GMAIL_BRIDGE_CONFIG_PATH env var")
+			raise FileNotFoundError(
+				f"{CONFIG_PATH} does not exist. Provide path to config using GMAIL_BRIDGE_CONFIG_PATH env var"
+			)
+
 
 def override_config(config: BridgeConfig):
 	global _runtime_config_override

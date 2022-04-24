@@ -11,18 +11,17 @@ import base64
 from pydantic import BaseModel
 from .log import Logger
 
-
 DEBUG = os.environ.get("DEBUG", "1") == "0"
 NAMESPACE = os.environ.get("GMAIL-BRIDGE_NAMESPACE", "jifchat-gmail-bridge")
 
-
 logger = Logger(service="gmail-bridge")
-
 
 EMAIL_SCOPES = [
 	'https://www.googleapis.com/auth/gmail.readonly',
 	'https://www.googleapis.com/auth/gmail.compose',
 	'https://www.googleapis.com/auth/gmail.send',
+	'https://www.googleapis.com/auth/userinfo.email',
+	'https://www.googleapis.com/auth/userinfo.profile',
 ]
 
 
@@ -30,7 +29,6 @@ EMAIL_SCOPES = [
 class ServiceKey:
 	client_secret: str
 	client_id: str
-	project_id: str
 	redirect_uri: str = "urn:ietf:wg:oauth:2.0:oob"
 
 
