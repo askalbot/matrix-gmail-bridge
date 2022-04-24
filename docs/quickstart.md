@@ -20,21 +20,31 @@ In this guide we'll setup the bridge and go through basic usage.
 ## Bridge Setup
 - Get sample config file:
 ```sh
-docker run --rm ghcr.io/askalbot/matrix-gmail-bridge:main python3 -m app.main bridge_config > config.yaml
+docker run --rm \
+	ghcr.io/askalbot/matrix-gmail-bridge:main \
+	python3 -m app.main bridge_config > config.yaml
 ```
 
 - Update `config.yaml` according to your project.
 
 - Generate Appservice config (this will be used by homeserver):
 ```sh
-docker run --rm -e GMAIL_BRIDGE_CONFIG_PATH="/config.yaml" -v $PWD/config.yaml:/config.yaml ghcr.io/askalbot/matrix-gmail-bridge:main python3 -m app.main hs_config > gmail_bridge.yaml
+docker run --rm \
+	-e GMAIL_BRIDGE_CONFIG_PATH="/config.yaml" \
+	-v $PWD/config.yaml:/config.yaml \
+	ghcr.io/askalbot/matrix-gmail-bridge:main \
+	python3 -m app.main hs_config > gmail_bridge.yaml
 ```
 
 - Add `gmail_bridge.yaml` file to homeserver config.
 - Restart homeserver.
 - Start bridge:
-```bash
-docker run --rm -e GMAIL_BRIDGE_CONFIG_PATH="/config.yaml" -v $PWD/config.yaml:/config.yaml ghcr.io/askalbot/matrix-gmail-bridge:main python3 -m app.main run_server
+```sh
+docker run --rm \
+	-e GMAIL_BRIDGE_CONFIG_PATH="/config.yaml" \
+	-v $PWD/config.yaml:/config.yaml \
+	ghcr.io/askalbot/matrix-gmail-bridge:main \
+	python3 -m app.main run_server
 ```
 
 ## Login
