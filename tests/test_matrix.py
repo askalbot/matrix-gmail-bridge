@@ -209,7 +209,7 @@ async def run_server(mock_google, test_config: BridgeConfig, event_loop):
 
 
 @pytest.fixture(scope="function")
-async def test_client(test_config: BridgeConfig) -> app.nio_client.NioClient:
+async def test_client(test_config: BridgeConfig) -> app.nio_client.AppserviceClient:
     client = nio.AsyncClient(homeserver=test_config.HOMESERVER_URL)
 
     localpart = f"new_user{uuid.uuid4().hex}"
@@ -218,8 +218,8 @@ async def test_client(test_config: BridgeConfig) -> app.nio_client.NioClient:
     r = await client.register(localpart, password)
     assert not isinstance(r, nio.ErrorResponse), r
 
-    client = app.nio_client.NioClient(
-        homeserver_url=test_config.HOMESERVER_URL, homeserver_name=test_config.HOMESERVER_NAME, user=user_id
+    client = app.nio_client.AppserviceClient(
+        homeserver_url=test_config.HOMESERVER_URL, homeserver_name=test_config.HOMESERVER_NAME, appservice_id=user_id
     )
     r = await client.login(password)
     assert isinstance(r, nio.LoginResponse), r
@@ -244,12 +244,12 @@ async def keep_checking(
 
 @dataclass
 class TestUser:
-    nio_client: app.nio_client.NioClient
+    nio_client: app.nio_client.AppserviceClient
     gclient: MockGmailClient
 
 
 @pytest.fixture(scope="function")
-async def test_user(test_config: BridgeConfig, mock_google, run_server, test_client: app.nio_client.NioClient) -> TestUser:
+async def test_user(test_config: BridgeConfig, mock_google, run_server, test_client: app.nio_client.AppserviceClient) -> TestUser:
     auth = MockGoogleAuth(test_config.get_service_key())
     from app.main import event_handler
 
@@ -283,7 +283,7 @@ async def test_subject(test_user: TestUser):
     async def mail_recvd_check() -> bool:
         return len(test_user.gclient.recvd_mails) == 1
 
-    assert await keep_checking(mail_recvd_check), ("didn't recieve msg", await test_user.nio_client.c_room_members(room_id))
+    assert await keep_checking(mail_recvd_check), ("didn't recieve msg", await test_user.nio_client.get_room_members(room_id))
     assert test_user.gclient.recvd_mails[0].content.subject =="my room subject" 
 
 
@@ -306,7 +306,7 @@ async def test_send_recv_basic(test_user: TestUser):
     async def mail_recvd_check() -> bool:
         return len(test_user.gclient.recvd_mails) == 1
 
-    assert await keep_checking(mail_recvd_check), ("didn't recieve msg", await test_user.nio_client.c_room_members(room_id))
+    assert await keep_checking(mail_recvd_check), ("didn't recieve msg", await test_user.nio_client.get_room_members(room_id))
 
     # -------------------------- Mail from new user should create new user in matrix
 
@@ -322,7 +322,7 @@ async def test_send_recv_basic(test_user: TestUser):
     )
 
     async def member_joined() -> bool:
-        members = await test_user.nio_client.c_room_members(room_id)
+        members = await test_user.nio_client.get_room_members(room_id)
         return "@_gmail_bridge_my_guy_at_gmail.com:jif.one" in members
 
     assert await keep_checking(member_joined), "New User didn't join room"

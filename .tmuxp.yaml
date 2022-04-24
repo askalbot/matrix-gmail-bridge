@@ -1,0 +1,9 @@
+session_name: main
+windows:
+  - window_name: element
+    panes:
+      - scripts/element.sh
+
+  - window_name: synapse
+    panes:
+      - scripts/synapse.sh

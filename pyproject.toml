@@ -11,25 +11,26 @@ python = "^3.8"
 aiogoogle = "^2.0.1"
 matrix-nio = "^0.18.4"
 uvicorn = "^0.14.0"
-colorama = "^0.4.4"
 beautifulsoup4 = "^4.9.3"
 mail-parser = "^3.15.0"
 datargs = "^0.8.0"
 fastapi = "^0.63.0"
 httpx-oauth = "^0.3.6"
-pydantic = {git = "https://github.com/samuelcolvin/pydantic", "rev" = "c256dccbb383a7fd462f62fcb5d55558eb3cb108"}
+pydantic = "^1.9.0"
 pycryptodome = "^3.11.0"
 structlog = "^21.2.0"
 PyYAML = "^6.0"
 
 [tool.poetry.dev-dependencies]
+colorama = "^0.4.4"
 pytest = "^6.2.5"
 pytest-asyncio = "^0.15.1"
 pytest-watch = "^4.2.0"
 pytest-mock = "^3.6.1"
 yapf = "^0.31.0"
-lovely-pytest-docker = "^0.2.1"
+#lovely-pytest-docker = "^0.2.1"
 pytest-error-for-skips = "^2.0.2"
+mkdocs-material = "^8.2.9"
 
 
 [build-system]

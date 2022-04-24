@@ -6,3 +6,5 @@ coverage.xml
 .element_app/
 .matrix_app_data/
 .matrix_bridge/
+.container_data
+dev_config.yaml
