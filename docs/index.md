@@ -3,6 +3,7 @@
 This is an implementation of simple puppeted matrix bridge for gmail.
 
 ## Bridging Limitation
+### Simple Puppet
 Right now it's a [simple puppeted bridge](https://matrix.org/docs/guides/types-of-bridging#simple-puppeted-bridge) so it can be used to send/recv emails through matrix, but it won't be able to reflect mails sent using gmail platform.  
 
 Assuming Bob is using bridge to interact with gmail:
@@ -10,6 +11,9 @@ Assuming Bob is using bridge to interact with gmail:
 - Bob send a mail to Alice using matrix: visible on matrix to Bob
 - Bob recieves a mail from Alice: visible on matrix to Bob
 - Bob send a mail to Alice using gmail (web/app): **NOT** visible on matrix to Bob
+
+### Partial History
+Bridge does not sync all the activities from a thread. Only the recent ones for first time. After that all the messages will be synced.
 
 ## General Mappings
 ### Threads
