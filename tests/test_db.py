@@ -2,6 +2,7 @@ import pytest
 from app.db import *
 import os
 
+
 async def _execute_kv_test(kv: Kv):
 	assert await kv.get("somethign") == None
 	await kv.set("somethign", "2")
@@ -9,13 +10,15 @@ async def _execute_kv_test(kv: Kv):
 	await kv.set("somethign", "3")
 	assert await kv.get("somethign") == "3"
 
+
 @pytest.mark.asyncio
 async def test_kv():
 	await _execute_kv_test(DictKv())
 
+
 @pytest.mark.asyncio
 async def test_db():
-	db = Db(DictKv(), os.urandom(16))
+	db = Db(DictKv())
 
 	assert len(await db._get_all_users()) == 0
 	assert (await db.get_user("unknown_user")).auth_state == AuthState.logged_out
@@ -27,9 +30,8 @@ async def test_db():
 	token = Token(
 		access_token="",
 		refresh_token="",
-		email = "email",
-		expiry = dt.datetime.now(),
-		raw = {},
+		email="email",
+		expiry=dt.datetime.now(),
 	)
 	inserted = log_out_user.logged_in(token)
 	await db.upsert_user(inserted)
@@ -37,7 +39,6 @@ async def test_db():
 	assert got.auth_state == AuthState.logged_in
 	assert (await db.get_user("matrix1")).email_address == "email"
 	assert len(await db.all_active_users()) == 1
-
 
 	await db.upsert_user(log_out_user)
 	assert (await db.get_user("matrix1")).auth_state == AuthState.logged_out

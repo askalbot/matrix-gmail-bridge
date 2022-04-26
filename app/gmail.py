@@ -346,7 +346,6 @@ class GoogleAuth:
 			self.service_key.redirect_uri,
 			scope=EMAIL_SCOPES,
 		)
-		print(url)
 		return url
 
 	async def get_access_token(self, token_code: str) -> Token:
