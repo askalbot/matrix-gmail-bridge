@@ -34,6 +34,10 @@ class GmailTokenException(Exception):
 
 
 class Gmail(BaseModel):
+	
+	# NOTE: It's assumed that gmail_id is chronological.
+	# Didn't find any documentation for it, but it seems to be the case.
+	# And simplifies the code.
 	gmail_id: str
 	thread_id: str
 	sender: str
